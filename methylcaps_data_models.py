@@ -177,7 +177,7 @@ class CapsNet(nn.Module):
     def recon_loss(self, x_orig, x_hat):
         return self.recon_loss_fn(x_hat, x_orig)
 
-    def margin_loss(self,x, labels):
+    def margin_loss(self,x, labels, weights=1.):
         batch_size = x.size(0)
 
         v_c = torch.sqrt((x**2).sum(dim=2, keepdim=True))
@@ -190,13 +190,13 @@ class CapsNet(nn.Module):
         #print(right)
         #print(labels)
 
-        loss = labels * left + self.lr_balance * (1.0 - labels) * right
+        loss = weights*(labels * left + self.lr_balance * (1.0 - labels) * right)
         #print(loss.shape)
         loss = loss.sum(dim=1).mean()
         return loss
 
-    def calculate_loss(self, x_orig, x_hat, y_pred, y_true):
-        margin_loss = self.margin_loss(y_pred, y_true)
+    def calculate_loss(self, x_orig, x_hat, y_pred, y_true, weights=1.):
+        margin_loss = self.margin_loss(y_pred, y_true, weights=weights)
         recon_loss = self.gamma*self.recon_loss(x_orig,x_hat)
         loss = margin_loss + recon_loss
         return loss, margin_loss, recon_loss

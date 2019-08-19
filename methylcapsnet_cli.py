@@ -22,6 +22,7 @@ import argparse
 import pickle
 from sklearn.metrics import classification_report
 import click
+from sklearn.utils.class_weight import compute_class_weight
 from methylcaps_data_models import *
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h','--help'], max_content_width=90)
@@ -84,6 +85,7 @@ def train_capsnet(train_methyl_array,
 					decoder_topology,
 					learning_rate,
 					routing_iterations):
+
 	hlt_list=filter(None,hidden_topology.split(','))
     if hlt_list:
         hidden_topology=list(map(int,hlt_list))
@@ -129,6 +131,12 @@ def train_capsnet(train_methyl_array,
 	primary_caps = PrimaryCaps(modules=final_modules,hidden_topology=hidden_topology,n_output=primary_caps_out_len)
 	hidden_caps = []
 	n_out_caps=len(dataset.y_unique)
+
+	weights=torch.tensor(compute_class_weight('balanced',dataset.binarizer.classes_,ma.pheno[interest_col].values),dtype=torch.float)
+
+	if torch.cuda.is_available():
+		weights = weights.cuda()
+
 	output_caps = CapsLayer(n_out_caps,n_primary,primary_caps_out_len,caps_out_len,routing_iterations=routing_iterations)
 	decoder = Decoder(n_out_caps*caps_out_len,len(list(ma.beta)),decoder_top)
 	capsnet = CapsNet(primary_caps, hidden_caps, output_caps, decoder, gamma=gamma)
@@ -140,6 +148,7 @@ def train_capsnet(train_methyl_array,
 	    os.makedirs(d,exist_ok=True)
 	os.makedirs('results/routing_weights',exist_ok=True)
 	# extract all c_ij for all layers across all batches, or just last batch
+	losses=dict(train=[],val=[])
 	optimizer = Adam(capsnet.parameters(),lr)
 	scheduler=CosineAnnealingLR(optimizer, T_max=10, eta_min=0, last_epoch=-1)
 	for epoch in range(n_epochs):
@@ -157,7 +166,7 @@ def train_capsnet(train_methyl_array,
 				y_true=y_true.cuda()
 				module_x=[mod.cuda() for mod in module_x]
 			x_orig, x_hat, y_pred, embedding, primary_caps_out=capsnet(x_orig,module_x)
-			loss,margin_loss,recon_loss=capsnet.calculate_loss(x_orig, x_hat, y_pred, y_true)
+			loss,margin_loss,recon_loss=capsnet.calculate_loss(x_orig, x_hat, y_pred, y_true, weights=weights)
 			Y['true'].extend(y_true.argmax(1).detach().cpu().numpy().tolist())
 			Y['pred'].extend(F.softmax(torch.sqrt((y_pred**2).sum(2))).argmax(1).detach().cpu().numpy().tolist())
 			train_loss=margin_loss.item()#print(loss)
@@ -167,6 +176,7 @@ def train_capsnet(train_methyl_array,
 			optimizer.step()
 		#print(capsnet.primary_caps.get_weights())
 		running_loss/=(i+1)
+		losses['train'].append(running_loss)
 		print('Epoch {}: Train Loss {}, Train R2: {}, Train MAE: {}'.format(epoch,running_loss,r2_score(Y['true'],Y['pred']), mean_absolute_error(Y['true'],Y['pred'])))
 		print(classification_report(Y['true'],Y['pred']))
 		scheduler.step()
@@ -193,12 +203,13 @@ def train_capsnet(train_methyl_array,
 				primary_caps_out=primary_caps_out.view(primary_caps_out.size(0),primary_caps_out.size(1)*primary_caps_out.size(2))
 				Y['embeddings'].append(embedding.detach().cpu().numpy())
 				Y['embeddings2'].append(primary_caps_out.detach().cpu().numpy())
-				loss,margin_loss,recon_loss=capsnet.calculate_loss(x_orig, x_hat, y_pred, y_true)
+				loss,margin_loss,recon_loss=capsnet.calculate_loss(x_orig, x_hat, y_pred, y_true, weights=weights)
 				val_loss=margin_loss.item()#print(loss)
 				running_loss=running_loss+np.array([loss.item(),margin_loss,recon_loss.item()])
 				Y['true'].extend(y_true.argmax(1).detach().cpu().numpy().tolist())
 				Y['pred'].extend((y_pred**2).sum(2).argmax(1).detach().cpu().numpy().tolist())
 			running_loss/=(i+1)
+			losses['val'].append(running_loss)
 			Y['routing_weights'].iloc[:,:]=Y['routing_weights'].values/(i+1)
 
 		Y['pred']=np.array(Y['pred']).astype(str)
@@ -231,6 +242,18 @@ def train_capsnet(train_methyl_array,
 		print('Epoch {}: Val Loss {}, Margin Loss {}, Recon Loss {}, Val R2: {}, Val MAE: {}'.format(epoch,running_loss[0],running_loss[1],running_loss[2],r2_score(Y['true'].astype(int),Y['pred'].astype(int)), mean_absolute_error(Y['true'].astype(int),Y['pred'].astype(int))))
 		print(classification_report(Y['true'],Y['pred']))
 		#Y=pd.DataFrame([])
+
+		print([min(losses['val']),n_epochs,
+				n_bins,
+				bin_len,
+				min_capsule_len,
+				primary_caps_out_len,
+				caps_out_len,
+				hidden_topology,
+				gamma,
+				decoder_topology,
+				learning_rate,
+				routing_iterations])
 
 if __name__=='__main__':
 	methylcaps()
