@@ -196,7 +196,7 @@ class CapsNet(nn.Module):
         return loss
 
     def calculate_loss(self, x_orig, x_hat, y_pred, y_true, weights=1.):
-        margin_loss = self.margin_loss(y_pred, y_true, weights=weights)
+        margin_loss = self.margin_loss(y_pred, y_true, weights=weights) # .expand_as(y_true)???
         recon_loss = self.gamma*self.recon_loss(x_orig,x_hat)
         loss = margin_loss + recon_loss
         return loss, margin_loss, recon_loss
