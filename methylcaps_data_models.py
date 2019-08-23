@@ -1,8 +1,21 @@
 import torch
 from torch import nn
+from sklearn.metrics import mean_absolute_error, r2_score
+from sklearn.metrics import classification_report
 from torch.nn import functional as F
 from sklearn.preprocessing import LabelBinarizer
 import numpy as np, pandas as pd
+import copy, os
+from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim import Adam
+from torch.utils.data import Dataset, DataLoader
+from sklearn.decomposition import PCA
+import plotly.offline as py
+import plotly.express as px
+import pickle
+#from sksurv.linear_model.coxph import BreslowEstimator
+from sklearn.utils.class_weight import compute_class_weight
+
 
 def softmax(input_tensor, dim=1):
     # transpose input
@@ -11,6 +24,19 @@ def softmax(input_tensor, dim=1):
     softmaxed_output = F.softmax(transposed_input.contiguous().view(-1, transposed_input.size(-1)), dim=-1)
     # un-transpose result
     return softmaxed_output.view(*transposed_input.size()).transpose(dim, len(input_tensor.size()) - 1)
+
+def CoxLoss(nn.Module):
+    """"""# add custom loss https://github.com/Tombaugh/CapSurv/blob/master/capsurv.py
+    def __init__(self):
+        super(CoxLoss, self).__init__()
+
+    def forward(self, y_pred_caps, y_true, y_true_orig):
+        y_pred_caps=y_pred_caps[:,1,:]
+        hazard_ratio=torch.exp(y_pred_caps)#torch.norm(y_pred_caps, p=2, dim=1))
+        log_risk=torch.log(torch.cumsum(hazard_ratio,dim=1))
+        uncensored_likelihood = y_pred_caps - log_risk
+        loss = uncensored_likelihood * -1.
+        return loss.mean(0)
 
 class MLP(nn.Module): # add latent space extraction, and spits out csv line of SQL as text for UMAP
     def __init__(self, n_input, hidden_topology, dropout_p, n_outputs=1, binary=False, softmax=False):
@@ -37,11 +63,12 @@ class MLP(nn.Module): # add latent space extraction, and spits out csv line of S
         return self.mlp(x)
 
 class MethylationDataset(Dataset):
-    def __init__(self, methyl_arr, outcome_col,binarizer=None, modules=[]):
+    def __init__(self, methyl_arr, outcome_col,binarizer=None, modules=[], module_names=None, original_interest_col=None):
         if binarizer==None:
             binarizer=LabelBinarizer()
             binarizer.fit(methyl_arr.pheno[outcome_col].astype(str).values)
         self.y=binarizer.transform(methyl_arr.pheno[outcome_col].astype(str).values)
+        self.y_orig=methyl_arr.pheno[outcome_col].values if np.issubdtype(methyl_arr.pheno[original_outcome_col].dtype, np.number) else np.argmax(self.y,1)
         self.y_unique=np.unique(np.argmax(self.y,1))
         self.binarizer=binarizer
         if not modules:
@@ -49,12 +76,14 @@ class MethylationDataset(Dataset):
         self.modules=modules
         self.X=methyl_arr.beta
         self.length=methyl_arr.beta.shape[0]
+        self.module_names=module_names
+        self.pheno = methyl_arr.pheno
 
     def __len__(self):
         return self.length
 
     def __getitem__(self,i):
-        return tuple([torch.FloatTensor(self.X.iloc[i].values)]+[torch.FloatTensor(self.X.iloc[i].loc[module].values) for module in self.modules]+[torch.FloatTensor(self.y[i])])
+        return tuple([torch.FloatTensor(self.X.iloc[i].values)]+[torch.FloatTensor(self.X.iloc[i].loc[module].values) for module in self.modules]+[torch.FloatTensor(self.y[i])]+[torch.FloatTensor(self.y_orig[i])])
 
 class PrimaryCaps(nn.Module):
     def __init__(self,modules,hidden_topology,n_output):
@@ -200,3 +229,151 @@ class CapsNet(nn.Module):
         recon_loss = self.gamma*self.recon_loss(x_orig,x_hat)
         loss = margin_loss + recon_loss
         return loss, margin_loss, recon_loss
+
+class Trainer:
+    def __init__(self, capsnet, validation_dataloader, n_epochs, lr, n_primary, custom_loss, gamma2):
+        self.capsnet=capsnet
+        self.validation_dataloader = validation_dataloader
+        self.lr = lr
+        self.optimizer = Adam(self.capsnet.parameters(),self.lr)
+    	self.scheduler=CosineAnnealingLR(self.optimizer, T_max=10, eta_min=0, last_epoch=-1)
+        self.n_epochs = n_epochs
+        self.module_names = self.validation_dataloader.dataset.module_names
+        self.n_primary=n_primary
+        self.custom_loss=custom_loss
+        self.gamma2=gamma2
+        self.custom_loss_fn=dict(none=None,
+                                  cox=CoxLoss())[self.custom_loss]
+
+    def compute_custom_loss(self,y_pred_caps, y_true, y_true_orig):
+        if self.custom_loss==None:
+            return 0.
+        else:
+            loss = self.custom_loss_fn(y_pred_caps, y_true, y_true_orig)
+            return loss
+
+    def initialize_dirs(self):
+        for d in ['figures/embeddings'+x for x in ['','2','3']]:
+    		os.makedirs(d,exist_ok=True)
+    	os.makedirs('results/routing_weights',exist_ok=True)
+
+    def fit(self, dataloader):
+        self.initialize_dirs()
+        self.weights=torch.tensor(compute_class_weight('balanced',dataloader.dataset.binarizer.classes_,np.argmax(dataloader.dataset.y,axis=1)),dtype=torch.float)
+    	if torch.cuda.is_available():
+    		self.weights = self.weights.cuda()
+        self.losses=dict(train=[],val=[])
+        best_model = self.capsnet
+        self.val_losses=[]
+        for epoch in range(self.n_epochs):
+            self.epoch=epoch
+            self.losses['train'].append(self.train_loop(dataloader))
+            val_loss=self.val_loop(self.validation_dataloader)
+            self.val_losses.append(val_loss[0])
+            self.losses['val'].append(val_loss)
+            if val_loss[0]<=min(self.val_losses):
+                best_model=copy.deepcopy(self.capsnet)
+        self.capsnet=best_model
+        return self
+
+    def train_loop(self, dataloader):
+        self.capsnet.train(True)
+		running_loss=0.
+		Y={'true':[],'pred':[]}
+		for i,batch in enumerate(dataloader):
+			x_orig=batch[0]
+			#print(x_orig)
+			y_true=batch[-2]
+            y_true_orig=batch[-1]
+			module_x = batch[1:-2]
+			if torch.cuda.is_available():
+				x_orig=x_orig.cuda()
+				y_true=y_true.cuda()
+                y_true_orig=y_true_orig.cuda()
+				module_x=[mod.cuda() for mod in module_x]
+			x_orig, x_hat, y_pred, embedding, primary_caps_out=capsnet(x_orig,module_x)
+			loss,margin_loss,recon_loss=self.capsnet.calculate_loss(x_orig, x_hat, y_pred, y_true, weights=self.weights)
+            loss=loss+self.gamma2*self.compute_custom_loss(y_pred_caps, y_true, y_true_orig)
+			Y['true'].extend(y_true.argmax(1).detach().cpu().numpy().tolist())
+			Y['pred'].extend(F.softmax(torch.sqrt((y_pred**2).sum(2))).argmax(1).detach().cpu().numpy().tolist())
+			train_loss=margin_loss.item()#print(loss)
+			running_loss+=train_loss
+			self.optimizer.zero_grad()
+			loss.backward()
+			self.optimizer.step()
+        print('Epoch {}: Train Loss {}, Train R2: {}, Train MAE: {}'.format(self.epoch,running_loss,r2_score(Y['true'],Y['pred']), mean_absolute_error(Y['true'],Y['pred'])))
+		print(classification_report(Y['true'],Y['pred']))
+		#print(capsnet.primary_caps.get_weights())
+		running_loss/=(i+1)
+        self.scheduler.step()
+        return running_loss
+
+    def val_loop(self, val_dataloader):
+        self.capsnet.train(False)
+		running_loss=np.zeros((3,)).astype(float)
+		Y={'true':[],'pred':[],'embeddings':[],'embeddings2':[],'embeddings3':[],'routing_weights':[]}
+		with torch.no_grad():
+			for i,batch in enumerate(val_dataloader):
+				x_orig=batch[0]
+				y_true=batch[-2]
+                y_true_orig=batch[-1]
+				module_x = batch[1:-2]
+				if torch.cuda.is_available():
+					x_orig=x_orig.cuda()
+					y_true=y_true.cuda()
+                    y_true_orig=y_true_orig.cuda()
+					module_x=[mod.cuda() for mod in module_x]
+				x_orig, x_hat, y_pred, embedding, primary_caps_out=self.capsnet(x_orig,module_x)
+				loss,margin_loss,recon_loss=self.capsnet.calculate_loss(x_orig, x_hat, y_pred, y_true, weights=self.weights)
+                loss=loss+self.gamma2*self.compute_custom_loss(y_pred_caps, y_true, y_true_orig)
+				val_loss=margin_loss.item()#print(loss)
+				running_loss=running_loss+np.array([loss.item(),margin_loss,recon_loss.item()])
+
+				routing_coefs=self.capsnet.caps_output_layer.return_routing_coef().detach().cpu().numpy()
+				if not i:
+					Y['routing_weights']=pd.DataFrame(routing_coefs[0,...,0].T,index=val_dataloader.dataset.binarizer.classes_,columns=val_dataloader.dataset.module_names)
+				else:
+					Y['routing_weights']+=pd.DataFrame(routing_coefs[0,...,0].T,index=val_dataloader.dataset.binarizer.classes_,columns=val_dataloader.dataset.module_names)
+				Y['embeddings3'].append(torch.cat([primary_caps_out[i] for i in range(x_orig.size(0))],dim=0).detach().cpu().numpy())
+				primary_caps_out=primary_caps_out.view(primary_caps_out.size(0),primary_caps_out.size(1)*primary_caps_out.size(2))
+				Y['embeddings'].append(embedding.detach().cpu().numpy())
+				Y['embeddings2'].append(primary_caps_out.detach().cpu().numpy())
+				Y['true'].extend(y_true.argmax(1).detach().cpu().numpy().tolist())
+				Y['pred'].extend((y_pred**2).sum(2).argmax(1).detach().cpu().numpy().tolist())
+			running_loss/=(i+1)
+			losses['val'].append(running_loss)
+			Y['routing_weights'].iloc[:,:]=Y['routing_weights'].values/(i+1)
+            Y['pred']=np.array(Y['pred']).astype(str)
+    		Y['true']=np.array(Y['true']).astype(str)
+    		print('Epoch {}: Val Loss {}, Margin Loss {}, Recon Loss {}, Val R2: {}, Val MAE: {}'.format(epoch,running_loss[0],running_loss[1],running_loss[2],r2_score(Y['true'].astype(int),Y['pred'].astype(int)), mean_absolute_error(Y['true'].astype(int),Y['pred'].astype(int))))
+    		print(classification_report(Y['true'],Y['pred']))
+            self.make_val_plots(Y)
+            self.save_routing_weights(Y)
+        return running_loss
+
+    def make_val_plots(self, Y):
+        Y['embeddings']=pd.DataFrame(PCA(n_components=2).fit_transform(np.vstack(Y['embeddings'])),columns=['x','y'])
+		Y['embeddings2']=pd.DataFrame(PCA(n_components=2).fit_transform(np.vstack(Y['embeddings2'])),columns=['x','y'])
+		Y['embeddings3']=pd.DataFrame(PCA(n_components=2).fit_transform(np.vstack(Y['embeddings3'])),columns=['x','y'])#'z'
+		Y['embeddings']['color']=Y['true']
+		Y['embeddings2']['color']=Y['true']
+		Y['embeddings3']['color']=self.module_names*self.validation_dataloader.dataset.y.shape[0]#ma_v.beta.shape[0]#Y['true']
+		Y['embeddings3']['name']=list(reduce(lambda x,y:x+y,[[i]*self.n_primary for i in Y['true']]))
+		fig = px.scatter(Y['embeddings3'], x="x", y="y", color="color", symbol='name')#, text='name')
+		py.plot(fig, filename='figures/embeddings3/embeddings3.{}.pos.html'.format(self.epoch),auto_open=False)
+		#Y['embeddings3']['color']=list(reduce(lambda x,y:x+y,[[i]*n_primary for i in Y['true']]))
+		fig = px.scatter(Y['embeddings3'], x="x", y="y", color="name")#, text='color')
+		py.plot(fig, filename='figures/embeddings3/embeddings3.{}.true.html'.format(self.epoch),auto_open=False)
+		fig = px.scatter(Y['embeddings'], x="x", y="y", color="color")
+		py.plot(fig, filename='figures/embeddings/embeddings.{}.true.html'.format(self.epoch),auto_open=False)
+		fig = px.scatter(Y['embeddings2'], x="x", y="y", color="color")
+		py.plot(fig, filename='figures/embeddings2/embeddings2.{}.true.html'.format(self.epoch),auto_open=False)
+		Y['embeddings'].loc[:,'color']=Y['pred']
+		Y['embeddings2'].loc[:,'color']=Y['pred']
+		fig = px.scatter(Y['embeddings'], x="x", y="y", color="color")
+		py.plot(fig, filename='figures/embeddings/embeddings.{}.pred.html'.format(self.epoch),auto_open=False)
+		fig = px.scatter(Y['embeddings2'], x="x", y="y", color="color")
+		py.plot(fig, filename='figures/embeddings2/embeddings2.{}.pred.html'.format(self.epoch),auto_open=False)
+
+    def save_routing_weights(self, Y):
+        pickle.dump(Y['routing_weights'],open('results/routing_weights/routing_weights.{}.p'.format(self.epoch),'wb'))
