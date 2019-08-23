@@ -15,7 +15,9 @@ import plotly.express as px
 import pickle
 #from sksurv.linear_model.coxph import BreslowEstimator
 from sklearn.utils.class_weight import compute_class_weight
-
+RANDOM_SEED=42
+np.random.seed(42)
+torch.manual_seed(RANDOM_SEED)
 
 def softmax(input_tensor, dim=1):
     # transpose input

@@ -18,7 +18,10 @@ import pickle
 from sklearn.metrics import classification_report
 import click
 from methylcaps_data_models import *
-
+import sqlite3
+RANDOM_SEED=42
+np.random.seed(42)
+torch.manual_seed(RANDOM_SEED)
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h','--help'], max_content_width=90)
 
@@ -63,12 +66,13 @@ def get_final_modules(ma=None,a='450kannotations.bed',b='lola_vignette_data/acti
 @click.option('-co', '--caps_out_len', default=20, help='Dimensionality of output capsule embeddings.', show_default=True)
 @click.option('-ht', '--hidden_topology', default='', help='Topology of hidden layers, comma delimited, leave empty for one layer encoder, eg. 100,100 is example of 5-hidden layer topology. This topology is used for each primary capsule. Try 30,80,50?', type=click.Path(exists=False), show_default=True)
 @click.option('-g', '--gamma', default=1e-2, help='How much to weight autoencoder loss.', show_default=True)
-@click.option('-dt', '--decoder_topology', default='', help='Topology of decoder layers, comma delimited, leave empty for one layer encoder, eg. 100,100 is example of 5-hidden layer topology. This topology is used for the decoder. Try 100,300?', type=click.Path(exists=False), show_default=True)
+@click.option('-dt', '--decoder_topology', default='', help='Topology of decoder layers, comma delimited, leave empty for one layer decoder, eg. 100,100 is example of 5-hidden layer topology. This topology is used for the decoder. Try 100,300?', type=click.Path(exists=False), show_default=True)
 @click.option('-lr', '--learning_rate', default=1e-3, help='Learning rate.', show_default=True)
 @click.option('-ri', '--routing_iterations', default=3, help='Number of routing iterations.', show_default=True)
 @click.option('-ov', '--overlap', default=0., help='Overlap fraction of bin length.', show_default=True)
 @click.option('-cl', '--custom_loss', default='none', help='Specify custom loss function.', show_default=True, type=click.Choice(['none','cox']))
 @click.option('-g2', '--gamma2', default=1e-2, help='How much to weight custom loss.', show_default=True)
+@click.option('-j', '--job', default=0, help='Job number.', show_default=True)
 def train_capsnet(train_methyl_array,
 					val_methyl_array,
 					interest_col,
@@ -85,7 +89,12 @@ def train_capsnet(train_methyl_array,
 					routing_iterations,
 					overlap,
 					custom_loss,
-					gamma2):
+					gamma2,
+					job):
+
+	conn = sqlite3.connect('jobs.db')
+	pd.DataFrame([job],index=[0],columns=['job']).to_sql('jobs',conn,if_exists='append')
+	conn.close()
 
 	hlt_list=filter(None,hidden_topology.split(','))
 	if hlt_list:
@@ -167,6 +176,10 @@ def train_capsnet(train_methyl_array,
 			decoder_topology,
 			learning_rate,
 			routing_iterations])
+
+	conn = sqlite3.connect('jobs.db')
+	pd.DataFrame([job,min(trainer.val_losses)],index=[0],columns=['job','val_loss']).to_sql('val_loss',conn,if_exists='append')
+	conn.close()
 
 if __name__=='__main__':
 	methylcaps()
