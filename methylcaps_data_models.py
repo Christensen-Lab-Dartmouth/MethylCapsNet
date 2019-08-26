@@ -15,6 +15,7 @@ import plotly.express as px
 import pickle
 import pysnooper
 from torch.autograd import Variable
+from functools import reduce
 #from sksurv.linear_model.coxph import BreslowEstimator
 from sklearn.utils.class_weight import compute_class_weight
 RANDOM_SEED=42
@@ -242,7 +243,7 @@ class CapsNet(nn.Module):
 		return loss, margin_loss, recon_loss
 
 class Trainer:
-	def __init__(self, capsnet, validation_dataloader, n_epochs, lr, n_primary, custom_loss, gamma2):
+	def __init__(self, capsnet, validation_dataloader, n_epochs, lr, n_primary, custom_loss, gamma2, class_balance=False):
 		self.capsnet=capsnet
 		self.validation_dataloader = validation_dataloader
 		self.lr = lr
@@ -255,6 +256,7 @@ class Trainer:
 		self.gamma2=gamma2
 		self.custom_loss_fn=dict(none=None,
 								  cox=CoxLoss())[self.custom_loss]
+		self.class_balance = class_balance
 
 	def compute_custom_loss(self,y_pred_caps, y_true, y_true_orig):
 		if self.custom_loss=='none':
@@ -270,9 +272,12 @@ class Trainer:
 
 	def fit(self, dataloader):
 		self.initialize_dirs()
-		self.weights=torch.tensor(compute_class_weight('balanced',np.arange(len(dataloader.dataset.binarizer.classes_)),np.argmax(dataloader.dataset.y,axis=1)),dtype=torch.float)
-		if torch.cuda.is_available():
-			self.weights = self.weights.cuda()
+		if self.class_balance:
+			self.weights=torch.tensor(compute_class_weight('balanced',np.arange(len(dataloader.dataset.binarizer.classes_)),np.argmax(dataloader.dataset.y,axis=1)),dtype=torch.float)
+			if torch.cuda.is_available():
+				self.weights = self.weights.cuda()
+		else:
+			self.weights=1.
 		self.losses=dict(train=[],val=[])
 		best_model = self.capsnet
 		self.val_losses=[]
@@ -305,8 +310,8 @@ class Trainer:
 			x_orig, x_hat, y_pred, embedding, primary_caps_out=self.capsnet(x_orig,module_x)
 			loss,margin_loss,recon_loss=self.capsnet.calculate_loss(x_orig, x_hat, y_pred, y_true, weights=self.weights)
 			loss=loss+self.gamma2*self.compute_custom_loss(y_pred, y_true, y_true_orig)
-			Y['true'].extend(y_true_orig.detach().cpu().numpy().flatten().tolist())
-			Y['pred'].extend(F.softmax(torch.sqrt((y_pred**2).sum(2))).argmax(1).detach().cpu().numpy().flatten().tolist())
+			Y['true'].extend(y_true_orig.detach().cpu().numpy().flatten().astype(int).tolist())
+			Y['pred'].extend(F.softmax(torch.sqrt((y_pred**2).sum(2))).argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
 			train_loss=margin_loss.item()#print(loss)
 			running_loss+=train_loss
 			self.optimizer.zero_grad()
@@ -349,8 +354,8 @@ class Trainer:
 				primary_caps_out=primary_caps_out.view(primary_caps_out.size(0),primary_caps_out.size(1)*primary_caps_out.size(2))
 				Y['embeddings'].append(embedding.detach().cpu().numpy())
 				Y['embeddings2'].append(primary_caps_out.detach().cpu().numpy())
-				Y['true'].extend(y_true_orig.detach().cpu().numpy().flatten().tolist())
-				Y['pred'].extend((y_pred**2).sum(2).argmax(1).detach().cpu().numpy().flatten().tolist())
+				Y['true'].extend(y_true_orig.detach().cpu().numpy().astype(int).flatten().tolist())
+				Y['pred'].extend((y_pred**2).sum(2).argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
 			running_loss/=(i+1)
 			Y['routing_weights'].iloc[:,:]=Y['routing_weights'].values/(i+1)
 			Y['pred']=np.array(Y['pred']).astype(str)
