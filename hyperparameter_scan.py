@@ -30,12 +30,18 @@ class MonitorJobs(Thread):
 
 	def search_jobs(self):
 		conn = sqlite3.connect('jobs.db')
-		df=pd.read_sql("select * from 'val_loss'",conn).set_index('job')
-		conn.close()
-		if self.job in list(df.index):
-			self.val_loss=df.loc[self.job,'val_loss']
+		c=conn.cursor()
+		c.execute("""SELECT count(name) FROM sqlite_master WHERE type='table' AND name='val_loss';""")
+		if c.fetchone()[0]==1:
+			df=pd.read_sql("select * from 'val_loss'",conn).set_index('job')
+			if self.job in list(df.index):
+				self.val_loss=df.loc[self.job,'val_loss']
+			else:
+				self.val_loss=-1
 		else:
 			self.val_loss=-1
+		conn.close()
+
 
 	def run(self):
 		time_from_start = 0.
@@ -81,7 +87,7 @@ def return_val_loss(command, torque, total_time, delay_time, job, gpu, additiona
 @click.option('-s', '--search_strategy', default='bayes', help='Search strategy.', type=click.Choice(['bayes','random','quasi']))
 @click.option('-tt', '--total_time', default=60, help='Total time to run each job in minutes.', show_default=True)
 @click.option('-dt', '--delay_time', default=60, help='Total time to wait before searching for output job in seconds.', show_default=True)
-@click.option('-gpu', '--gpu', default=-1, help='If torque submit, which gpu to use.', show_default=True)
+@click.option('-gpu', '--gpu', is_flag=True, help='If torque submit, which gpu to use.')
 @click.option('-a', '--additional_command', default='', help='Additional command to input for torque run.', type=click.Path(exists=False))
 @click.option('-ao', '--additional_options', default='', help='Additional options to input for torque run.', type=click.Path(exists=False))
 def hyperparameter_scan(train_methyl_array,
@@ -108,7 +114,7 @@ def hyperparameter_scan(train_methyl_array,
 	def score_loss(params,i):
 		conn = sqlite3.connect('jobs.db')
 		c=conn.cursor()
-		c.execute("""SELECT name FROM sqlite_master WHERE type='table' AND name='jobs';""")
+		c.execute("""SELECT count(name) FROM sqlite_master WHERE type='table' AND name='jobs';""")
 		if c.fetchone()[0]==1:
 			job=pd.read_sql("select * from 'jobs'",conn)['job'].max()+1
 		else:
@@ -119,8 +125,8 @@ def hyperparameter_scan(train_methyl_array,
 		pd.DataFrame([job],index=[0],columns=['job']).to_sql('jobs',conn,if_exists='append')
 		conn.close()
 
-		params['hlt']=','.join([str(params['encoder_layer_{}_size'.format(j)]) for j in range(params['num_encoder_hidden_layers'])])
-		params['dlt']=','.join([str(params['decoder_layer_{}_size'.format(j)]) for j in range(params['num_decoder_hidden_layers'])])
+		params['hidden_topology']=','.join([str(params['encoder_layer_{}_size'.format(j)]) for j in range(params['num_encoder_hidden_layers'])])
+		params['decoder_topology']=','.join([str(params['decoder_layer_{}_size'.format(j)]) for j in range(params['num_decoder_hidden_layers'])])
 
 		for j in range(params['num_encoder_hidden_layers']):
 			del params['encoder_layer_{}_size'.format(j)]
@@ -132,7 +138,7 @@ def hyperparameter_scan(train_methyl_array,
 
 		params.update(additional_params)
 
-		command='{} python methylcapsnet_cli.py train_capsnet {}'.format('CUDA_VISIBLE_DEVICES=0' if gpu and not torque else '',' '.join(['-{} {}'.format(k,v) for k,v in params.items()]))
+		command='{} python methylcapsnet_cli.py train_capsnet {}'.format('CUDA_VISIBLE_DEVICES=0' if gpu and not torque else '',' '.join(['--{} {}'.format(k,v) for k,v in params.items()]))
 
 		val_loss = return_val_loss(command, torque, total_time, delay_time, job, gpu, additional_command, additional_options)
 
