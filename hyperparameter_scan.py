@@ -19,7 +19,7 @@ def hypscan():
 
 class MonitorJobs(Thread):
 	def __init__(self, start_time, delay, end_time, job):
-		super(Monitor, self).__init__()
+		super(MonitorJobs, self).__init__()
 		self.stopped = False
 		self.start_time = start_time
 		self.end_time = end_time
@@ -105,11 +105,15 @@ def hyperparameter_scan(train_methyl_array,
 							custom_loss=custom_loss)
 
 
-	def score_loss(params):
+	def score_loss(params,i):
 		conn = sqlite3.connect('jobs.db')
-		df=pd.read_sql("select * from 'jobs'",conn)
+		c=conn.cursor()
+		c.execute("""SELECT name FROM sqlite_master WHERE type='table' AND name='jobs';""")
+		if c.fetchone()[0]==1:
+			job=pd.read_sql("select * from 'jobs'",conn)['job'].max()+1
+		else:
+			job=i+1
 		conn.close()
-		job=df['job'].max()+1
 
 		conn = sqlite3.connect('jobs.db')
 		pd.DataFrame([job],index=[0],columns=['job']).to_sql('jobs',conn,if_exists='append')
@@ -117,13 +121,14 @@ def hyperparameter_scan(train_methyl_array,
 
 		params['hlt']=','.join([str(params['encoder_layer_{}_size'.format(j)]) for j in range(params['num_encoder_hidden_layers'])])
 		params['dlt']=','.join([str(params['decoder_layer_{}_size'.format(j)]) for j in range(params['num_decoder_hidden_layers'])])
-		del params['num_encoder_hidden_layers'], params['num_decoder_hidden_layers']
 
 		for j in range(params['num_encoder_hidden_layers']):
 			del params['encoder_layer_{}_size'.format(j)]
 
 		for j in range(params['num_decoder_hidden_layers']):
 			del params['decoder_layer_{}_size'.format(j)]
+
+		del params['num_encoder_hidden_layers'], params['num_decoder_hidden_layers']
 
 		params.update(additional_params)
 
@@ -165,7 +170,7 @@ def hyperparameter_scan(train_methyl_array,
 		sampler_opts['skip']=3
 	elif optimization_method in ['bayes']:
 		sampler_opts['n_bootstrap']=10
-		sampler_opts['random_state']=42
+		#sampler_opts['random_state']=42
 
 	optimizer = dict(random=choco.Random,quasi=choco.QuasiRandom,bayes=choco.Bayes)[optimization_method]
 
@@ -174,7 +179,7 @@ def hyperparameter_scan(train_methyl_array,
 	n_jobs=300
 	n_workers=10
 	for i in range(n_jobs//n_workers): # add a continuous queue in the future
-		token_loss_list = dask.compute(*[(dask.delayed(lambda x: x)(token),dask.delayed(score_loss)(params)) for token,params in [sampler.next() for i in range(n_workers)]],scheduler='processes',num_workers=n_workers)
+		token_loss_list = dask.compute(*[(dask.delayed(lambda x: x)(token),dask.delayed(score_loss)(params,i)) for i,(token,params) in enumerate([sampler.next() for i in range(n_workers)])],scheduler='processes',num_workers=n_workers)
 		for token,loss in token_loss_list:
 			if loss!=-1:
 				sampler.update(token, loss)
