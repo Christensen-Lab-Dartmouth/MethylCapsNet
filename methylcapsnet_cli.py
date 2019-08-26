@@ -20,8 +20,10 @@ import click
 from methylcaps_data_models import *
 import sqlite3
 RANDOM_SEED=42
-np.random.seed(42)
+np.random.seed(RANDOM_SEED)
 torch.manual_seed(RANDOM_SEED)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h','--help'], max_content_width=90)
 
@@ -92,9 +94,7 @@ def train_capsnet(train_methyl_array,
 					gamma2,
 					job):
 
-	conn = sqlite3.connect('jobs.db')
-	pd.DataFrame([job],index=[0],columns=['job']).to_sql('jobs',conn,if_exists='append')
-	conn.close()
+
 
 	hlt_list=filter(None,hidden_topology.split(','))
 	if hlt_list:
@@ -115,10 +115,10 @@ def train_capsnet(train_methyl_array,
 	if not os.path.exists('hg19.{}.overlap.{}.bed'.format(bin_len,overlap)):
 		BedTool('hg19.genome').makewindows(g='hg19.genome',w=bin_len,s=bin_len-overlap).saveas('hg19.{}.overlap.{}.bed'.format(bin_len,overlap))#.to_dataframe().shape
 
-	ma=MethylationArray.from_pickle(methyl_arrays['train'])
-	ma_v=MethylationArray.from_pickle(methyl_arrays['val'])
+	ma=MethylationArray.from_pickle(train_methyl_array)
+	ma_v=MethylationArray.from_pickle(val_methyl_array)
 
-	final_modules,modulecpgs,module_names=get_final_modules(b='hg19.{}.bed'.format(bin_len),include_last=include_last, min_capsule_len=min_capsule_len)
+	final_modules,modulecpgs,module_names=get_final_modules(ma=ma,b='hg19.{}.overlap.{}.bed'.format(bin_len,overlap),include_last=include_last, min_capsule_len=min_capsule_len)
 	print('LEN_MODULES',len(final_modules))
 
 	if not include_last:
@@ -146,7 +146,7 @@ def train_capsnet(train_methyl_array,
 	n_out_caps=len(dataset.y_unique)
 
 	output_caps = CapsLayer(n_out_caps,n_primary,primary_caps_out_len,caps_out_len,routing_iterations=routing_iterations)
-	decoder = Decoder(n_out_caps*caps_out_len,len(list(ma.beta)),decoder_top)
+	decoder = Decoder(n_out_caps*caps_out_len,len(list(ma.beta)),decoder_topology)
 	capsnet = CapsNet(primary_caps, hidden_caps, output_caps, decoder, gamma=gamma)
 
 	if torch.cuda.is_available():
