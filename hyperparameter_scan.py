@@ -1,11 +1,21 @@
 from threading import Thread
 import dask
 import chocolate as choco
+import time
+import numpy as np, pandas as pd
+import subprocess
+import sqlite3
+import click
 RANDOM_SEED=42
 np.random.seed(42)
 
 
+CONTEXT_SETTINGS = dict(help_option_names=['-h','--help'], max_content_width=90)
 
+@click.group(context_settings= CONTEXT_SETTINGS)
+@click.version_option(version='0.1')
+def hypscan():
+	pass
 
 class MonitorJobs(Thread):
 	def __init__(self, start_time, delay, end_time, job):
@@ -61,7 +71,19 @@ def return_val_loss(command, torque, total_time, delay_time, job, gpu, additiona
 
 	return val_loss
 
-
+@hypscan.command()
+@click.option('-i', '--train_methyl_array', default='./train_val_test_sets/train_methyl_array.pkl', help='Input database for beta and phenotype data.', type=click.Path(exists=False), show_default=True)
+@click.option('-v', '--val_methyl_array', default='./train_val_test_sets/val_methyl_array.pkl', help='Test database for beta and phenotype data.', type=click.Path(exists=False), show_default=True)
+@click.option('-ic', '--interest_col', default='disease', help='Specify column looking to make predictions on.', show_default=True)
+@click.option('-nb', '--n_bins', default=0, help='Number of bins if column is continuous variable.', show_default=True)
+@click.option('-cl', '--custom_loss', default='none', help='Specify custom loss function.', show_default=True, type=click.Choice(['none','cox']))
+@click.option('-t', '--torque', is_flag=True, help='Submit jobs on torque.')
+@click.option('-s', '--search_strategy', default='bayes', help='Search strategy.', type=click.Choice(['bayes','random','quasi']))
+@click.option('-tt', '--total_time', default=60, help='Total time to run each job in minutes.', show_default=True)
+@click.option('-dt', '--delay_time', default=60, help='Total time to wait before searching for output job in seconds.', show_default=True)
+@click.option('-gpu', '--gpu', default=-1, help='If torque submit, which gpu to use.', show_default=True)
+@click.option('-a', '--additional_command', default='', help='Additional command to input for torque run.', type=click.Path(exists=False))
+@click.option('-ao', '--additional_options', default='', help='Additional options to input for torque run.', type=click.Path(exists=False))
 def hyperparameter_scan(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -158,3 +180,6 @@ def hyperparameter_scan(train_methyl_array,
 				sampler.update(token, loss)
 
 	conn.close()
+
+if __name__=='__main__':
+	hypscan()

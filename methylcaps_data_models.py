@@ -23,6 +23,7 @@ np.random.seed(RANDOM_SEED)
 torch.manual_seed(RANDOM_SEED)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 class MethylationDataset(Dataset):
 	def __init__(self, methyl_arr, outcome_col,binarizer=None, modules=[], module_names=None, original_interest_col=None):
