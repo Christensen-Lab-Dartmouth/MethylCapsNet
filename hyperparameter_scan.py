@@ -128,11 +128,15 @@ def hyperparameter_scan(train_methyl_array,
 		params['hidden_topology']=','.join([str(params['encoder_layer_{}_size'.format(j)]) for j in range(params['num_encoder_hidden_layers'])])
 		params['decoder_topology']=','.join([str(params['decoder_layer_{}_size'.format(j)]) for j in range(params['num_decoder_hidden_layers'])])
 
-		for j in range(params['num_encoder_hidden_layers']):
-			del params['encoder_layer_{}_size'.format(j)]
+		# for j in range(params['num_encoder_hidden_layers']):
+		# 	del params['encoder_layer_{}_size'.format(j)]
+		#
+		# for j in range(params['num_decoder_hidden_layers']):
+		# 	del params['decoder_layer_{}_size'.format(j)]
 
-		for j in range(params['num_decoder_hidden_layers']):
-			del params['decoder_layer_{}_size'.format(j)]
+		for k in list(params.keys()):
+			if k.endswith('_size'):
+				del params[k]
 
 		del params['num_encoder_hidden_layers'], params['num_decoder_hidden_layers']
 
@@ -140,7 +144,7 @@ def hyperparameter_scan(train_methyl_array,
 
 		print(params)
 
-		command='{} python methylcapsnet_cli.py train_capsnet {}'.format('CUDA_VISIBLE_DEVICES=0' if gpu and not torque else '',' '.join(['--{} {}'.format(k,v) for k,v in params.items()]))
+		command='{} python methylcapsnet_cli.py train_capsnet {}'.format('CUDA_VISIBLE_DEVICES=0' if gpu and not torque else '',' '.join(['--{} {}'.format(k,v) for k,v in params.items() if v]))
 
 		val_loss = return_val_loss(command, torque, total_time, delay_time, job, gpu, additional_command, additional_options)
 
