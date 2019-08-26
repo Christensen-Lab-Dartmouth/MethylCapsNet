@@ -355,7 +355,7 @@ class Trainer:
 			Y['routing_weights'].iloc[:,:]=Y['routing_weights'].values/(i+1)
 			Y['pred']=np.array(Y['pred']).astype(str)
 			Y['true']=np.array(Y['true']).astype(str)
-			print('Epoch {}: Val Loss {}, Margin Loss {}, Recon Loss {}, Val R2: {}, Val MAE: {}'.format(self.epoch,running_loss[0],running_loss[1],running_loss[2],r2_score(Y['true'].astype(int),Y['pred'].astype(int)), mean_absolute_error(Y['true'].astype(int),Y['pred'].astype(int))))
+			print('Epoch {}: Val Loss {}, Margin Loss {}, Recon Loss {}, Val R2: {}, Val MAE: {}'.format(self.epoch,running_loss[0],running_loss[1],running_loss[2],r2_score(Y['true'].astype(float),Y['pred'].astype(float)), mean_absolute_error(Y['true'].astype(float),Y['pred'].astype(float))))
 			print(classification_report(Y['true'],Y['pred']))
 			self.make_val_plots(Y)
 			self.save_routing_weights(Y)
