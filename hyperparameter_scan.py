@@ -30,18 +30,24 @@ class MonitorJobs(Thread):
 		self.start()
 
 	def search_jobs(self):
-		conn = sqlite3.connect('jobs.db')
-		c=conn.cursor()
-		c.execute("""SELECT count(name) FROM sqlite_master WHERE type='table' AND name='val_loss';""")
-		if c.fetchone()[0]==1:
-			df=pd.read_sql("select * from 'val_loss'",conn).set_index('job')
-			if self.job in list(df.index):
-				self.val_loss=df.loc[self.job,'val_loss']
-			else:
+		#print('read jobs')
+		with sqlite3.connect('jobs.db', check_same_thread=False) as conn:
+			# c=conn.cursor()
+			# c.execute("""SELECT count(name) FROM sqlite_master WHERE type='table' AND name='val_loss';""")
+			# if c.fetchone()[0]==1:
+			try:
+				df=pd.read_sql("select * from 'val_loss'",conn).set_index('job')
+				#print(self.job in list(df.index))
+				if self.job in list(df.index):
+					self.val_loss=df.loc[self.job,'val_loss']
+				else:
+					self.val_loss=-1
+			except Exception as e:
+				print(e)
 				self.val_loss=-1
-		else:
-			self.val_loss=-1
-		conn.close()
+			# else:
+			# 	self.val_loss=-1
+			# del c
 
 
 	def run(self):
@@ -106,7 +112,7 @@ def hyperparameter_scan(train_methyl_array,
 						additional_options,
 						n_jobs):
 
-
+	subprocess.call('rm -f jobs.db',shell=True)
 	additional_params=dict(train_methyl_array=train_methyl_array,
 							val_methyl_array=val_methyl_array,
 							interest_col=interest_col,
@@ -116,18 +122,24 @@ def hyperparameter_scan(train_methyl_array,
 
 	def score_loss(args):
 		params,i=args
-		conn = sqlite3.connect('jobs.db')
-		c=conn.cursor()
-		c.execute("""SELECT count(name) FROM sqlite_master WHERE type='table' AND name='jobs';""")
-		if c.fetchone()[0]==1:
-			job=pd.read_sql("select * from 'jobs'",conn)['job'].max()+1
-		else:
-			job=i+1
-		conn.close()
 
-		conn = sqlite3.connect('jobs.db')
-		pd.DataFrame([job],index=[0],columns=['job']).to_sql('jobs',conn,if_exists='append')
-		conn.close()
+		job=np.random.randint(0,1000000)
+
+		# with sqlite3.connect('jobs.db', check_same_thread=False) as conn:
+		# 	# c=conn.cursor()
+		# 	# c.execute("""SELECT count(name) FROM sqlite_master WHERE type='table' AND name='jobs';""")
+		# 	# if c.fetchone()[0]==1:
+		# 	# 	job=pd.read_sql("select * from 'jobs'",conn)['job'].max()+1
+		# 	# else:
+		# 	# 	job=i+1
+		# 	try:
+		# 		job=pd.read_sql("select * from 'jobs'",conn)['job'].max()+1
+		# 	except:
+		# 		job=i+1
+		# 	# del c
+		#
+		# with sqlite3.connect('jobs.db', check_same_thread=False) as conn:
+		# 	pd.DataFrame([job],index=[0],columns=['job']).to_sql('jobs',conn,if_exists='append')
 
 		params['hidden_topology']=','.join([str(params['encoder_layer_{}_size'.format(j)]) for j in range(params['num_encoder_hidden_layers'])])
 		params['decoder_topology']=','.join([str(params['decoder_layer_{}_size'.format(j)]) for j in range(params['num_decoder_hidden_layers'])])
@@ -146,9 +158,11 @@ def hyperparameter_scan(train_methyl_array,
 
 		params.update(additional_params)
 
+		params['job']=job
+
 		print(params)
 
-		command='{} python methylcapsnet_cli.py train_capsnet {}'.format('CUDA_VISIBLE_DEVICES=0' if gpu and not torque else '',' '.join(['--{} {}'.format(k,v) for k,v in params.items() if v]))
+		command='{} python methylcapsnet_cli.py train_capsnet {} {}'.format('CUDA_VISIBLE_DEVICES=0' if gpu and not torque else '',' '.join(['--{} {}'.format(k,v) for k,v in params.items() if v]),'&' if not torque else '')
 
 		val_loss = return_val_loss(command, torque, total_time, delay_time, job, gpu, additional_command, additional_options)
 
@@ -156,11 +170,8 @@ def hyperparameter_scan(train_methyl_array,
 
 	def return_loss(args):
 		token,args=args
+		#print(token)
 		return token, score_loss(args)
-
-	conn = choco.SQLiteConnection(url="sqlite:///hyperparameter_scan.db")
-
-
 
 	grid=dict(n_epochs=choco.quantized_uniform(low=10, high=50, step=10),
 				bin_len=choco.quantized_uniform(low=100000, high=1000000, step=100000),
@@ -194,7 +205,9 @@ def hyperparameter_scan(train_methyl_array,
 
 	optimizer = dict(random=choco.Random,quasi=choco.QuasiRandom,bayes=choco.Bayes)[optimization_method]
 
-	sampler = optimizer(conn, grid, **sampler_opts)
+	hyp_conn = choco.SQLiteConnection(url="sqlite:///hyperparameter_scan.db")
+
+	sampler = optimizer(hyp_conn, grid, **sampler_opts)
 
 	n_workers=10
 	in_batches=False
@@ -202,7 +215,7 @@ def hyperparameter_scan(train_methyl_array,
 		for j in range(n_jobs//n_workers): # add a continuous queue in the future
 			token_loss_list = dask.compute(*[(dask.delayed(lambda x: x)(token),dask.delayed(score_loss)((params,i))) for i,(token,params) in enumerate([sampler.next() for i in range(n_workers)])],scheduler='processes',num_workers=n_workers)
 			for token,loss in token_loss_list:
-				if loss!=-1:
+				if loss>=0:
 					sampler.update(token, loss)
 	else:
 		client = Client()
@@ -211,7 +224,7 @@ def hyperparameter_scan(train_methyl_array,
 		i=n_workers
 		for future in pool:
 			token,val_loss=future.result()
-			if loss!=-1:
+			if val_loss>=0:
 				sampler.update(token, loss)
 			token,params=sampler.next()
 			new_future=client.submit(return_loss,(token,(params,i)))
@@ -222,7 +235,6 @@ def hyperparameter_scan(train_methyl_array,
 
 		client.close()
 
-	conn.close()
 
 if __name__=='__main__':
 	hypscan()

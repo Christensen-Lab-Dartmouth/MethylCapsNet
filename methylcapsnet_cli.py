@@ -164,11 +164,13 @@ def train_capsnet(train_methyl_array,
 					gamma2=gamma2)
 
 	try:
+		#assert 1==2
 		trainer.fit(dataloader=dataloader)
 		val_loss=min(trainer.val_losses)
-	except:
-		val_loss=-1
-
+	except Exception as e:
+		print(e)
+		val_loss=-2
+	#print(val_loss)
 	# print([min(trainer.val_losses),n_epochs,
 	# 		n_bins,
 	# 		bin_len,
@@ -181,9 +183,8 @@ def train_capsnet(train_methyl_array,
 	# 		learning_rate,
 	# 		routing_iterations])
 
-	conn = sqlite3.connect('jobs.db')
-	pd.DataFrame([job,val_loss],index=[0],columns=['job','val_loss']).to_sql('val_loss',conn,if_exists='append')
-	conn.close()
+	with sqlite3.connect('jobs.db', check_same_thread=False) as conn:
+		pd.DataFrame([job,val_loss],index=['job','val_loss'],columns=[0]).T.to_sql('val_loss',conn,if_exists='append')
 
 if __name__=='__main__':
 	methylcaps()
