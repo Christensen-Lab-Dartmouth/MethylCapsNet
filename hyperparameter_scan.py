@@ -164,7 +164,7 @@ def hyperparameter_scan(train_methyl_array,
 
 		print(params)
 
-		command='{} python methylcapsnet_cli.py train_capsnet {} {}'.format('CUDA_VISIBLE_DEVICES=0' if gpu and not torque else '',' '.join(['--{} {}'.format(k,v) for k,v in params.items() if v]),'&' if not torque else '')
+		command='{} python methylcapsnet_cli.py train_capsnet {} || python methylcapsnet_cli.py report_loss -j {}'.format('CUDA_VISIBLE_DEVICES=0' if gpu and not torque else '',' '.join(['--{} {}'.format(k,v) for k,v in params.items() if v]),params['job'])#,'&' if not torque else '')
 
 		val_loss = return_val_loss(command, torque, total_time, delay_time, job, gpu, additional_command, additional_options)
 

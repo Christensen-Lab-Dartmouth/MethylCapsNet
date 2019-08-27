@@ -186,5 +186,12 @@ def train_capsnet(train_methyl_array,
 	with sqlite3.connect('jobs.db', check_same_thread=False) as conn:
 		pd.DataFrame([job,val_loss],index=['job','val_loss'],columns=[0]).T.to_sql('val_loss',conn,if_exists='append')
 
+@methylcaps.command()
+@click.option('-j', '--job', default=0, help='Job number.', show_default=True)
+@click.option('-l', '--loss', default=-1., help='Job number.', show_default=True)
+def report_loss(job,loss):
+	with sqlite3.connect('jobs.db', check_same_thread=False) as conn:
+		pd.DataFrame([job,val_loss],index=['job','val_loss'],columns=[0]).T.to_sql('val_loss',conn,if_exists='append')
+
 if __name__=='__main__':
 	methylcaps()
