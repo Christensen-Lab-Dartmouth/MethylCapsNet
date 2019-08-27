@@ -213,7 +213,7 @@ def hyperparameter_scan(train_methyl_array,
 			token,val_loss=future.result()
 			if loss!=-1:
 				sampler.update(token, loss)
-			token,params=sampler.update()
+			token,params=sampler.next()
 			new_future=client.submit(return_loss,(token,(params,i)))
 			pool.add(new_future)
 			i+=1
