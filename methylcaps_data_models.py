@@ -175,7 +175,7 @@ class CapsLayer(nn.Module):
 class Decoder(nn.Module):
 	def __init__(self, n_input, n_output, hidden_topology):
 		super(Decoder, self).__init__()
-		self.decoder=MLP(n_input,hidden_topology, 0., n_outputs=n_output, binary=True)
+		self.decoder=MLP(n_input,hidden_topology, 0., n_outputs=n_output, binary=False)
 
 	def forward(self, x):
 		return self.decoder(x)
@@ -187,7 +187,7 @@ class CapsNet(nn.Module):
 		self.caps_hidden_layers=caps_hidden_layers
 		self.caps_output_layer=caps_output_layer
 		self.decoder=decoder
-		self.recon_loss_fn = nn.BCELoss()
+		self.recon_loss_fn = nn.BCEWithLogitsLoss()
 		self.lr_balance=lr_balance
 		self.gamma=gamma
 

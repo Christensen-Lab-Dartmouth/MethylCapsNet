@@ -6,6 +6,7 @@ import numpy as np, pandas as pd
 import subprocess
 import sqlite3
 import click
+from dask.distributed import Client, as_completed
 RANDOM_SEED=42
 np.random.seed(42)
 
@@ -90,6 +91,7 @@ def return_val_loss(command, torque, total_time, delay_time, job, gpu, additiona
 @click.option('-gpu', '--gpu', is_flag=True, help='If torque submit, which gpu to use.')
 @click.option('-a', '--additional_command', default='', help='Additional command to input for torque run.', type=click.Path(exists=False))
 @click.option('-ao', '--additional_options', default='', help='Additional options to input for torque run.', type=click.Path(exists=False))
+@click.option('-j', '--n_jobs', default=300, help='Total number jobs to successfully run.', show_default=True)
 def hyperparameter_scan(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -101,7 +103,8 @@ def hyperparameter_scan(train_methyl_array,
 						delay_time,
 						gpu,
 						additional_command,
-						additional_options):
+						additional_options,
+						n_jobs):
 
 
 	additional_params=dict(train_methyl_array=train_methyl_array,
@@ -111,7 +114,8 @@ def hyperparameter_scan(train_methyl_array,
 							custom_loss=custom_loss)
 
 
-	def score_loss(params,i):
+	def score_loss(args):
+		params,i=args
 		conn = sqlite3.connect('jobs.db')
 		c=conn.cursor()
 		c.execute("""SELECT count(name) FROM sqlite_master WHERE type='table' AND name='jobs';""")
@@ -149,6 +153,10 @@ def hyperparameter_scan(train_methyl_array,
 		val_loss = return_val_loss(command, torque, total_time, delay_time, job, gpu, additional_command, additional_options)
 
 		return val_loss
+
+	def return_loss(args):
+		token,args=args
+		return token, score_loss(args)
 
 	conn = choco.SQLiteConnection(url="sqlite:///hyperparameter_scan.db")
 
@@ -188,13 +196,31 @@ def hyperparameter_scan(train_methyl_array,
 
 	sampler = optimizer(conn, grid, **sampler_opts)
 
-	n_jobs=300
 	n_workers=10
-	for i in range(n_jobs//n_workers): # add a continuous queue in the future
-		token_loss_list = dask.compute(*[(dask.delayed(lambda x: x)(token),dask.delayed(score_loss)(params,i)) for i,(token,params) in enumerate([sampler.next() for i in range(n_workers)])],scheduler='processes',num_workers=n_workers)
-		for token,loss in token_loss_list:
+	in_batches=False
+	if in_batches:
+		for j in range(n_jobs//n_workers): # add a continuous queue in the future
+			token_loss_list = dask.compute(*[(dask.delayed(lambda x: x)(token),dask.delayed(score_loss)((params,i))) for i,(token,params) in enumerate([sampler.next() for i in range(n_workers)])],scheduler='processes',num_workers=n_workers)
+			for token,loss in token_loss_list:
+				if loss!=-1:
+					sampler.update(token, loss)
+	else:
+		client = Client()
+		token_loss_list=client.map(return_loss,[(token,(params,i)) for i,(token,params) in enumerate([sampler.next() for i in range(n_workers)])])
+		pool=as_completed(token_loss_list)
+		i=n_workers
+		for future in pool:
+			token,val_loss=future.result()
 			if loss!=-1:
 				sampler.update(token, loss)
+			token,params=sampler.update()
+			new_future=client.submit(return_loss,(token,(params,i)))
+			pool.add(new_future)
+			i+=1
+			if i > n_jobs:
+				break
+
+		client.close()
 
 	conn.close()
 

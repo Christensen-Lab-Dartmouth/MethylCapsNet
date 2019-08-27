@@ -163,22 +163,26 @@ def train_capsnet(train_methyl_array,
 					custom_loss=custom_loss,
 					gamma2=gamma2)
 
-	trainer.fit(dataloader=dataloader)
+	try:
+		trainer.fit(dataloader=dataloader)
+		val_loss=min(trainer.val_losses)
+	except:
+		val_loss=-1
 
-	print([min(trainer.val_losses),n_epochs,
-			n_bins,
-			bin_len,
-			min_capsule_len,
-			primary_caps_out_len,
-			caps_out_len,
-			hidden_topology,
-			gamma,
-			decoder_topology,
-			learning_rate,
-			routing_iterations])
+	# print([min(trainer.val_losses),n_epochs,
+	# 		n_bins,
+	# 		bin_len,
+	# 		min_capsule_len,
+	# 		primary_caps_out_len,
+	# 		caps_out_len,
+	# 		hidden_topology,
+	# 		gamma,
+	# 		decoder_topology,
+	# 		learning_rate,
+	# 		routing_iterations])
 
 	conn = sqlite3.connect('jobs.db')
-	pd.DataFrame([job,min(trainer.val_losses)],index=[0],columns=['job','val_loss']).to_sql('val_loss',conn,if_exists='append')
+	pd.DataFrame([job,val_loss],index=[0],columns=['job','val_loss']).to_sql('val_loss',conn,if_exists='append')
 	conn.close()
 
 if __name__=='__main__':
