@@ -98,6 +98,7 @@ def return_val_loss(command, torque, total_time, delay_time, job, gpu, additiona
 @click.option('-a', '--additional_command', default='', help='Additional command to input for torque run.', type=click.Path(exists=False))
 @click.option('-ao', '--additional_options', default='', help='Additional options to input for torque run.', type=click.Path(exists=False))
 @click.option('-j', '--n_jobs', default=300, help='Total number jobs to successfully run.', show_default=True)
+@click.option('-w', '--n_workers', default=6, help='Total number jobs running at same time.', show_default=True)
 def hyperparameter_scan(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -110,7 +111,8 @@ def hyperparameter_scan(train_methyl_array,
 						gpu,
 						additional_command,
 						additional_options,
-						n_jobs):
+						n_jobs,
+						n_workers):
 
 	subprocess.call('rm -f jobs.db',shell=True)
 	additional_params=dict(train_methyl_array=train_methyl_array,
@@ -209,7 +211,6 @@ def hyperparameter_scan(train_methyl_array,
 
 	sampler = optimizer(hyp_conn, grid, **sampler_opts)
 
-	n_workers=10
 	in_batches=False
 	if in_batches:
 		for j in range(n_jobs//n_workers): # add a continuous queue in the future
