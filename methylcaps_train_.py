@@ -145,7 +145,7 @@ def train_capsnet_(train_methyl_array,
 		trainer.fit(dataloader=dataloader)
 		val_loss=min(trainer.val_losses)
 	except Exception as e:
-		#print(e)
+		print(e)
 		val_loss=-2
 	#print(val_loss)
 	# print([min(trainer.val_losses),n_epochs,
