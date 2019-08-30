@@ -9,7 +9,7 @@ import click
 from methylnet.torque_jobs import assemble_run_torque
 #from dask.distributed import Client, as_completed
 RANDOM_SEED=42
-np.random.seed(42)
+np.random.seed(RANDOM_SEED)
 
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h','--help'], max_content_width=90)
@@ -111,6 +111,7 @@ def return_val_loss(command, torque, total_time, delay_time, job, gpu, additiona
 @click.option('-j', '--n_jobs', default=300, help='Total number jobs to successfully run.', show_default=True)
 @click.option('-w', '--n_workers', default=6, help='Total number jobs running at same time.', show_default=True)
 @click.option('-u', '--update', is_flag=True, help='Update in script.')
+@click.option('-rs', '--random_seed', default=42, help='Random state.')
 def hyperparameter_scan(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -125,9 +126,12 @@ def hyperparameter_scan(train_methyl_array,
 						additional_options,
 						n_jobs,
 						n_workers,
-						update):
+						update,
+						random_seed):
 
-	subprocess.call('rm -f jobs.db',shell=True)
+	np.random.seed(random_seed)
+
+	#subprocess.call('rm -f jobs.db',shell=True)
 
 	opts=dict(train_methyl_array=train_methyl_array,
 							val_methyl_array=val_methyl_array,
@@ -143,12 +147,15 @@ def hyperparameter_scan(train_methyl_array,
 		opts['gpu']=''
 	additional_opts=dict(additional_command=additional_command,
 							additional_options=additional_options)
-	for job in range(n_jobs):
-		command='python hyperparameter_job.py hyperparameter_job {} {} &'.format(' '.join(['--{} {}'.format(k,v) for k,v in opts.items()]),' '.join(['--{} "{}"'.format(k,v) for k,v in additional_opts.items()]))
+	for job in [np.random.randint(0,10000000) for i in range(n_jobs)]:
+		opts['job']=job
+		command='python hyperparameter_job.py hyperparameter_job {} {}'.format(' '.join(['--{} {}'.format(k,v) for k,v in opts.items()]),' '.join(['--{} "{}"'.format(k,v) for k,v in additional_opts.items()]))
 		if update:
 			command='{} {}'.format(command,'-u')
+		command='{} {}'.format(command,'&' if not (torque and update) else '')
+		if update:
 			if torque:
-				assemble_run_torque(command, use_gpu=gpu, queue='gpuq' if gpu else "normal", time=int(np.ceil(total_time/60.)), ngpu=1, **additional_opts)
+				assemble_run_torque(command, use_gpu=gpu, queue='gpuq' if gpu else "normal", time=int(np.ceil(total_time/60.)), ngpu=1, additions=additional_opts['additional_command'],additional_options=additional_opts['additional_options'])
 			else:
 				command='{} {}'.format('CUDA_VISIBLE_DEVICES=0' if gpu else '',command)
 		else:

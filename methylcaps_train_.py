@@ -89,6 +89,12 @@ def train_capsnet_(train_methyl_array,
 	ma=MethylationArray.from_pickle(train_methyl_array)
 	ma_v=MethylationArray.from_pickle(val_methyl_array)
 
+	try:
+		ma.remove_na_samples(interest_col)
+		ma_v.remove_na_samples(interest_col)
+	except:
+		pass
+
 	final_modules,modulecpgs,module_names=get_final_modules(ma=ma,b='hg19.{}.overlap.{}.bed'.format(bin_len,overlap),include_last=include_last, min_capsule_len=min_capsule_len)
 	print('LEN_MODULES',len(final_modules))
 

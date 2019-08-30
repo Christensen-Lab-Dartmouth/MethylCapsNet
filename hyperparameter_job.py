@@ -8,7 +8,7 @@ import sqlite3
 import click
 from methylnet.torque_jobs import assemble_run_torque
 #from dask.distributed import Client, as_completed
-
+from methylcaps_train_ import *
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h','--help'], max_content_width=90)
 
@@ -104,6 +104,8 @@ def return_val_loss(command, torque, total_time, delay_time, job, gpu, additiona
 @click.option('-a', '--additional_command', default='', help='Additional command to input for torque run.', type=click.Path(exists=False))
 @click.option('-ao', '--additional_options', default='', help='Additional options to input for torque run.', type=click.Path(exists=False))
 @click.option('-u', '--update', is_flag=True, help='Update in script.')
+@click.option('-ne', '--n_epochs', default=10, help='Number of epochs. Setting to 0 induces scan of epochs.')
+@click.option('-j', '--job', default=42, help='Job name.')
 def hyperparameter_job(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -116,17 +118,22 @@ def hyperparameter_job(train_methyl_array,
 						gpu,
 						additional_command,
 						additional_options,
-						update):
+						update,
+						n_epochs,
+						job):
 
 	additional_params=dict(train_methyl_array=train_methyl_array,
 							val_methyl_array=val_methyl_array,
 							interest_col=interest_col,
 							n_bins=n_bins,
-							custom_loss=custom_loss)
+							custom_loss=custom_loss,
+							job=job)
 
+	if n_epochs:
+		additional_params['n_epochs']=n_epochs
 
 	def score_loss(params):
-		job=np.random.randint(0,1000000)
+		#job=np.random.randint(0,1000000)
 
 		params['hidden_topology']=','.join([str(params['encoder_layer_{}_size'.format(j)]) for j in range(params['num_encoder_hidden_layers'])])
 		params['decoder_topology']=','.join([str(params['decoder_layer_{}_size'.format(j)]) for j in range(params['num_decoder_hidden_layers'])])
@@ -139,12 +146,9 @@ def hyperparameter_job(train_methyl_array,
 
 		params.update(additional_params)
 
-		params['job']=job
-
 		print(params)
 
 		if update:
-			from methylcaps_train_ import *
 
 			val_loss = train_capsnet_(**params)
 
@@ -173,6 +177,9 @@ def hyperparameter_job(train_methyl_array,
 				gamma2=choco.quantized_log(-5,-1,1,10)
 			)
 
+	if n_epochs:
+		grid.pop('n_epochs')
+
 	optimization_method = 'bayes'
 	optimization_methods=['random','quasi','bayes']
 
@@ -193,10 +200,12 @@ def hyperparameter_job(train_methyl_array,
 
 	sampler = optimizer(hyp_conn, grid, **sampler_opts)
 
+	if optimization_method in ['bayes']:
+		sampler.random_state=np.random.RandomState(42)
+
 	token,params=sampler.next()
 
 	loss=score_loss(params)
-
 
 	if loss>=0:
 		sampler.update(token, loss)
