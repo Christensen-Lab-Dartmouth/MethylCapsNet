@@ -175,7 +175,7 @@ def hyperparameter_job(train_methyl_array,
 				routing_iterations=choco.quantized_uniform(low=2, high=6, step=1),
 				overlap=choco.quantized_uniform(low=0., high=.9, step=.1),
 				gamma2=choco.quantized_log(-5,-1,1,10)
-			)
+			) # ADD BATCH SIZE
 
 	if n_epochs:
 		grid.pop('n_epochs')
@@ -200,7 +200,7 @@ def hyperparameter_job(train_methyl_array,
 
 	sampler = optimizer(hyp_conn, grid, **sampler_opts)
 
-	if optimization_method in ['bayes']:
+	if 0 and optimization_method in ['bayes']:
 		sampler.random_state=np.random.RandomState(42)
 
 	token,params=sampler.next()
