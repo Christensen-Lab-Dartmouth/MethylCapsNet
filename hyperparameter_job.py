@@ -135,10 +135,10 @@ def hyperparameter_job(train_methyl_array,
 	def score_loss(params):
 		#job=np.random.randint(0,1000000)
 
-		params['hidden_topology']=','.join([str(params['el{}s'.format(j)]) for j in range(params['nehl'])])
-		params['decoder_topology']=','.join([str(params['dl{}s'.format(j)]) for j in range(params['ndhl'])])
+		params['hidden_topology']=','.join([str(params['el{}s'.format(j)]) for j in range(params['nehl']+1)])
+		params['decoder_topology']=','.join([str(params['dl{}s'.format(j)]) for j in range(params['ndhl']+1)])
 
-		del_params=[str(params['el{}s'.format(j)]) for j in range(params['nehl'])]+[str(params['dl{}s'.format(j)]) for j in range(params['ndhl'])]
+		del_params=['el{}s'.format(j) for j in range(params['nehl']+1)]+['dl{}s'.format(j) for j in range(params['ndhl']+1)]
 
 		# for k in list(params.keys()):
 		# 	if k.endswith('_size'):
