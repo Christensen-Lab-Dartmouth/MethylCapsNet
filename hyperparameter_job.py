@@ -135,14 +135,18 @@ def hyperparameter_job(train_methyl_array,
 	def score_loss(params):
 		#job=np.random.randint(0,1000000)
 
-		params['hidden_topology']=','.join([str(params['encoder_layer_{}_size'.format(j)]) for j in range(params['num_encoder_hidden_layers'])])
-		params['decoder_topology']=','.join([str(params['decoder_layer_{}_size'.format(j)]) for j in range(params['num_decoder_hidden_layers'])])
+		params['hidden_topology']=','.join([str(params['el{}s'.format(j)]) for j in range(params['nehl'])])
+		params['decoder_topology']=','.join([str(params['dl{}s'.format(j)]) for j in range(params['ndhl'])])
 
-		for k in list(params.keys()):
-			if k.endswith('_size'):
-				del params[k]
+		del_params=[str(params['el{}s'.format(j)]) for j in range(params['nehl'])]+[str(params['dl{}s'.format(j)]) for j in range(params['ndhl'])]
 
-		del params['num_encoder_hidden_layers'], params['num_decoder_hidden_layers']
+		# for k in list(params.keys()):
+		# 	if k.endswith('_size'):
+		# 		del params[k]
+		for param in del_params:
+			del params[param]
+
+		del params['nehl'], params['ndhl']
 
 		params.update(additional_params)
 
@@ -166,10 +170,10 @@ def hyperparameter_job(train_methyl_array,
 				min_capsule_len=choco.quantized_uniform(low=50, high=500, step=50),
 				primary_caps_out_len=choco.quantized_uniform(low=10, high=100, step=5),
 				caps_out_len=choco.quantized_uniform(low=10, high=100, step=5),
-				num_encoder_hidden_layers={i: {'encoder_layer_{}_size'.format(j):choco.quantized_uniform(10,100,10) for j in range(i+1)} for i in range(3)},
+				nehl={i: {'el{}s'.format(j):choco.quantized_uniform(10,100,10) for j in range(i+1)} for i in range(3)},
 				#hidden_topology=,
 				gamma=choco.quantized_log(-5,-1,1,10),
-				num_decoder_hidden_layers={i: {'decoder_layer_{}_size'.format(j):choco.quantized_uniform(10,100,10) for j in range(i+1)} for i in range(3)},
+				ndhl={i: {'dl{}s'.format(j):choco.quantized_uniform(10,100,10) for j in range(i+1)} for i in range(3)},
 				#decoder_topology=,
 				learning_rate=choco.quantized_log(-5,-1,1,10),
 				routing_iterations=choco.quantized_uniform(low=2, high=6, step=1),
