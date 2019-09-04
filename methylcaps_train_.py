@@ -48,6 +48,7 @@ def get_final_modules(ma=None,a='450kannotations.bed',b='lola_vignette_data/acti
 	module_names=(df3.iloc[:,0]+'_'+df3.iloc[:,1].astype(str)+'_'+df3.iloc[:,2].astype(str)).tolist()
 	return final_modules,modulecpgs,module_names
 
+#@pysnooper.snoop('train.log')
 def train_capsnet_(train_methyl_array,
 					val_methyl_array,
 					interest_col,
@@ -107,7 +108,7 @@ def train_capsnet_(train_methyl_array,
 		new_interest_col=interest_col+'_binned'
 		ma.pheno.loc[:,new_interest_col],bins=pd.cut(ma.pheno[interest_col],bins=n_bins,retbins=True)
 		ma_v.pheno.loc[:,new_interest_col],bins=pd.cut(ma_v.pheno[interest_col],bins=bins,retbins=True)
-		original_interest_col,interest_col=original_interest_col,new_interest_col
+		interest_col=new_interest_col
 
 	dataset=MethylationDataset(ma,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col)
 	dataset_v=MethylationDataset(ma_v,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col)

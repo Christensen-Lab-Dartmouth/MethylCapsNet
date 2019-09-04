@@ -47,18 +47,15 @@ class MethylationDataset(Dataset):
 
 	#@pysnooper.snoop('getitem.log')
 	def __getitem__(self,i):
-		X=[torch.FloatTensor(self.X.iloc[i].values.reshape(1,-1))]
+		X=[torch.FloatTensor(self.X.iloc[i].values)]
 		modules=[torch.FloatTensor(self.X.iloc[i].loc[module].values) for module in self.modules] # .reshape(1,-1)
-		y=[torch.FloatTensor(self.y[i].reshape(1,-1))]
-		y_orig=[torch.FloatTensor(self.y_orig[i].reshape(1,1))]
-		return tuple(X+modules+y+y_orig)
+		y=[torch.FloatTensor(self.y[i])]
+		#y_orig=[torch.FloatTensor(self.y_orig[i].reshape(1,1))]
+		return tuple(X+modules+y)#+y_orig)
 
 def softmax(input_tensor, dim=1):
-	# transpose input
 	transposed_input = input_tensor.transpose(dim, len(input_tensor.size()) - 1)
-	# calculate softmax
 	softmaxed_output = F.softmax(transposed_input.contiguous().view(-1, transposed_input.size(-1)), dim=-1)
-	# un-transpose result
 	return softmaxed_output.view(*transposed_input.size()).transpose(dim, len(input_tensor.size()) - 1)
 
 class CoxLoss(nn.Module):
@@ -75,7 +72,7 @@ class CoxLoss(nn.Module):
 		return loss.mean(0)
 
 class MLP(nn.Module): # add latent space extraction, and spits out csv line of SQL as text for UMAP
-	def __init__(self, n_input, hidden_topology, dropout_p, n_outputs=1, binary=False, softmax=False):
+	def __init__(self, n_input, hidden_topology, dropout_p, n_outputs=1, binary=False, softmax=False, relu=True):
 		super(MLP,self).__init__()
 		self.hidden_topology=hidden_topology
 		self.topology = [n_input]+hidden_topology+[n_outputs]
@@ -89,6 +86,8 @@ class MLP(nn.Module): # add latent space extraction, and spits out csv line of S
 			output_transform = nn.Sigmoid()
 		elif softmax:
 			output_transform = nn.Softmax()
+		elif relu:
+			output_transform = nn.ReLU()
 		else:
 			output_transform = nn.Dropout(p=0.)
 		self.layers.append(nn.Sequential(self.output_layer,output_transform))
@@ -110,8 +109,8 @@ class PrimaryCaps(nn.Module):
 		#print(u.size())
 		return self.squash(u)
 
-	@staticmethod
-	def squash(x):
+	#@staticmethod
+	def squash(self, x):
 		squared_norm = (x ** 2).sum(-1, keepdim=True)
 		#print('prim_norm',squared_norm.size())
 		output_tensor = squared_norm *  x / ((1. + squared_norm) * torch.sqrt(squared_norm))
@@ -164,8 +163,8 @@ class CapsLayer(nn.Module):
 	def return_routing_coef(self):
 		return self.c_ij
 
-	@staticmethod
-	def squash(x):
+	#@staticmethod
+	def squash(self,x):
 		#print(x.size())
 		squared_norm = (x ** 2).sum(-1, keepdim=True)
 		#print('norm',squared_norm.size())
@@ -175,7 +174,7 @@ class CapsLayer(nn.Module):
 class Decoder(nn.Module):
 	def __init__(self, n_input, n_output, hidden_topology):
 		super(Decoder, self).__init__()
-		self.decoder=MLP(n_input,hidden_topology, 0., n_outputs=n_output, binary=False)
+		self.decoder=MLP(n_input,hidden_topology, 0., n_outputs=n_output, binary=False, relu=False)
 
 	def forward(self, x):
 		return self.decoder(x)
@@ -187,7 +186,7 @@ class CapsNet(nn.Module):
 		self.caps_hidden_layers=caps_hidden_layers
 		self.caps_output_layer=caps_output_layer
 		self.decoder=decoder
-		self.recon_loss_fn = nn.BCEWithLogitsLoss()
+		self.recon_loss_fn = nn.BCEWithLogitsLoss() # WithLogits
 		self.lr_balance=lr_balance
 		self.gamma=gamma
 
@@ -232,7 +231,7 @@ class CapsNet(nn.Module):
 		#print(right)
 		#print(labels)
 
-		loss = weights*(labels * left + self.lr_balance * (1.0 - labels) * right)
+		loss = labels * left + self.lr_balance * (1.0 - labels) * right#weights*(labels * left + self.lr_balance * (1.0 - labels) * right)
 		#print(loss.shape)
 		loss = loss.sum(dim=1).mean()
 		return loss
@@ -293,6 +292,7 @@ class Trainer:
 		self.capsnet=best_model
 		return self
 
+	#@pysnooper.snoop('train_loop.log')
 	def train_loop(self, dataloader):
 		self.capsnet.train(True)
 		running_loss=0.
@@ -300,28 +300,30 @@ class Trainer:
 		for i,batch in enumerate(dataloader):
 			x_orig=batch[0]
 			#print(x_orig)
-			y_true=batch[-2]
-			y_true_orig=batch[-1]
-			module_x = batch[1:-2]
+			y_true=batch[-1]#[-2]
+			#y_true_orig=batch[-1]
+			module_x = batch[1:-1]#2]
 			if torch.cuda.is_available():
 				x_orig=x_orig.cuda()
 				y_true=y_true.cuda()
-				y_true_orig=y_true_orig.cuda()
+				#y_true_orig=y_true_orig.cuda()
 				module_x=[mod.cuda() for mod in module_x]
 			x_orig, x_hat, y_pred, embedding, primary_caps_out=self.capsnet(x_orig,module_x)
 			loss,margin_loss,recon_loss=self.capsnet.calculate_loss(x_orig, x_hat, y_pred, y_true, weights=self.weights)
-			loss=loss+self.gamma2*self.compute_custom_loss(y_pred, y_true, y_true_orig)
-			Y['true'].extend(y_true_orig.detach().cpu().numpy().flatten().astype(int).tolist())
-			Y['pred'].extend(F.softmax(torch.sqrt((y_pred**2).sum(2))).argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
-			train_loss=margin_loss.item()#print(loss)
-			running_loss+=train_loss
+			#loss=loss+self.gamma2*self.compute_custom_loss(y_pred, y_true, y_true_orig)
 			self.optimizer.zero_grad()
 			loss.backward()
 			self.optimizer.step()
+			Y['true'].extend(y_true.argmax(1).detach().cpu().numpy().flatten().astype(int).tolist())
+			Y['pred'].extend(F.softmax(torch.sqrt((y_pred**2).sum(2))).argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
+			train_loss=margin_loss.item()#print(loss)
+			running_loss+=train_loss
+
+		#y_true,y_pred=Y['true'],Y['pred']
+		running_loss/=(i+1)
 		print('Epoch {}: Train Loss {}, Train R2: {}, Train MAE: {}'.format(self.epoch,running_loss,r2_score(Y['true'],Y['pred']), mean_absolute_error(Y['true'],Y['pred'])))
 		print(classification_report(Y['true'],Y['pred']))
 		#print(capsnet.primary_caps.get_weights())
-		running_loss/=(i+1)
 		self.scheduler.step()
 		return running_loss
 
@@ -332,17 +334,17 @@ class Trainer:
 		with torch.no_grad():
 			for i,batch in enumerate(val_dataloader):
 				x_orig=batch[0]
-				y_true=batch[-2]
-				y_true_orig=batch[-1]
-				module_x = batch[1:-2]
+				y_true=batch[-1]#2
+				#y_true_orig=batch[-1]
+				module_x = batch[1:-1]#2
 				if torch.cuda.is_available():
 					x_orig=x_orig.cuda()
 					y_true=y_true.cuda()
-					y_true_orig=y_true_orig.cuda()
+					#y_true_orig=y_true_orig.cuda()
 					module_x=[mod.cuda() for mod in module_x]
 				x_orig, x_hat, y_pred, embedding, primary_caps_out=self.capsnet(x_orig,module_x)
 				loss,margin_loss,recon_loss=self.capsnet.calculate_loss(x_orig, x_hat, y_pred, y_true, weights=self.weights)
-				loss=loss+self.gamma2*self.compute_custom_loss(y_pred, y_true, y_true_orig)
+				#loss=loss+self.gamma2*self.compute_custom_loss(y_pred, y_true, y_true_orig)
 				val_loss=margin_loss.item()#print(loss)
 				running_loss=running_loss+np.array([loss.item(),margin_loss,recon_loss.item()])
 
@@ -355,7 +357,7 @@ class Trainer:
 				primary_caps_out=primary_caps_out.view(primary_caps_out.size(0),primary_caps_out.size(1)*primary_caps_out.size(2))
 				Y['embeddings'].append(embedding.detach().cpu().numpy())
 				Y['embeddings2'].append(primary_caps_out.detach().cpu().numpy())
-				Y['true'].extend(y_true_orig.detach().cpu().numpy().astype(int).flatten().tolist())
+				Y['true'].extend(y_true.argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
 				Y['pred'].extend((y_pred**2).sum(2).argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
 			running_loss/=(i+1)
 			Y['routing_weights'].iloc[:,:]=Y['routing_weights'].values/(i+1)

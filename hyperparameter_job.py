@@ -7,6 +7,7 @@ import subprocess
 import sqlite3
 import click
 from methylnet.torque_jobs import assemble_run_torque
+import time
 #from dask.distributed import Client, as_completed
 from methylcaps_train_ import *
 
@@ -106,6 +107,8 @@ def return_val_loss(command, torque, total_time, delay_time, job, gpu, additiona
 @click.option('-u', '--update', is_flag=True, help='Update in script.')
 @click.option('-ne', '--n_epochs', default=10, help='Number of epochs. Setting to 0 induces scan of epochs.')
 @click.option('-j', '--job', default=42, help='Job name.')
+@click.option('-srv', '--survival', is_flag=True, help='Scan parameters for survival analysis.')
+@click.option('-ot', '--optimize_time', is_flag=True, help='Optimize model for compute time.')
 def hyperparameter_job(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -120,7 +123,9 @@ def hyperparameter_job(train_methyl_array,
 						additional_options,
 						update,
 						n_epochs,
-						job):
+						job,
+						survival,
+						optimize_time):
 
 	additional_params=dict(train_methyl_array=train_methyl_array,
 							val_methyl_array=val_methyl_array,
@@ -134,6 +139,7 @@ def hyperparameter_job(train_methyl_array,
 
 	def score_loss(params):
 		#job=np.random.randint(0,1000000)
+		start_time=time.time()
 
 		params['hidden_topology']=','.join([str(params['el{}s'.format(j)]) for j in range(params['nehl']+1)])
 		params['decoder_topology']=','.join([str(params['dl{}s'.format(j)]) for j in range(params['ndhl']+1)])
@@ -162,27 +168,35 @@ def hyperparameter_job(train_methyl_array,
 
 			val_loss = return_val_loss(command, torque, total_time, delay_time, job, gpu, additional_command, additional_options)
 
-		return val_loss
+		end_time=time.time()
+
+		if optimize_time:
+			return val_loss, start_time-end_time
+		else:
+			return val_loss
 
 
 	grid=dict(n_epochs=choco.quantized_uniform(low=10, high=50, step=10),
-				bin_len=choco.quantized_uniform(low=100000, high=1000000, step=100000),
-				min_capsule_len=choco.quantized_uniform(low=50, high=500, step=50),
-				primary_caps_out_len=choco.quantized_uniform(low=10, high=100, step=5),
-				caps_out_len=choco.quantized_uniform(low=10, high=100, step=5),
-				nehl={i: {'el{}s'.format(j):choco.quantized_uniform(10,100,10) for j in range(i+1)} for i in range(3)},
+				bin_len=choco.quantized_uniform(low=500000, high=1000000, step=100000),
+				min_capsule_len=choco.quantized_uniform(low=200, high=500, step=50),
+				primary_caps_out_len=choco.quantized_uniform(low=10, high=50, step=5),
+				caps_out_len=choco.quantized_uniform(low=10, high=50, step=5),
+				nehl={i: {'el{}s'.format(j):choco.quantized_uniform(10,300,10) for j in range(i+1)} for i in range(3)},
 				#hidden_topology=,
 				gamma=choco.quantized_log(-5,-1,1,10),
-				ndhl={i: {'dl{}s'.format(j):choco.quantized_uniform(10,100,10) for j in range(i+1)} for i in range(3)},
+				ndhl={i: {'dl{}s'.format(j):choco.quantized_uniform(100,300,10) for j in range(i+1)} for i in range(3)},
 				#decoder_topology=,
 				learning_rate=choco.quantized_log(-5,-1,1,10),
-				routing_iterations=choco.quantized_uniform(low=2, high=6, step=1),
-				overlap=choco.quantized_uniform(low=0., high=.9, step=.1),
+				routing_iterations=choco.quantized_uniform(low=2, high=4, step=1),
+				overlap=choco.quantized_uniform(low=0., high=.5, step=.1),
 				gamma2=choco.quantized_log(-5,-1,1,10)
 			) # ADD BATCH SIZE
 
 	if n_epochs:
 		grid.pop('n_epochs')
+
+	if not survival:
+		grid.pop('gamma2')
 
 	optimization_method = 'bayes'
 	optimization_methods=['random','quasi','bayes']
@@ -211,7 +225,7 @@ def hyperparameter_job(train_methyl_array,
 
 	loss=score_loss(params)
 
-	if loss>=0:
+	if loss[0]>=0:
 		sampler.update(token, loss)
 
 

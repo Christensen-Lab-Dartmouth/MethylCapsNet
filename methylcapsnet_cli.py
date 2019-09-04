@@ -33,8 +33,6 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h','--help'], max_content_width=90)
 def methylcaps():
 	pass
 
-
-
 #@pysnooper.snoop('main_snoop.log')
 @methylcaps.command()
 @click.option('-i', '--train_methyl_array', default='./train_val_test_sets/train_methyl_array.pkl', help='Input database for beta and phenotype data.', type=click.Path(exists=False), show_default=True)

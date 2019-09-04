@@ -112,6 +112,7 @@ def return_val_loss(command, torque, total_time, delay_time, job, gpu, additiona
 @click.option('-w', '--n_workers', default=6, help='Total number jobs running at same time.', show_default=True)
 @click.option('-u', '--update', is_flag=True, help='Update in script.')
 @click.option('-rs', '--random_seed', default=42, help='Random state.')
+@click.option('-ot', '--optimize_time', is_flag=True, help='Optimize model for compute time.')
 def hyperparameter_scan(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -127,7 +128,8 @@ def hyperparameter_scan(train_methyl_array,
 						n_jobs,
 						n_workers,
 						update,
-						random_seed):
+						random_seed,
+						optimize_time):
 
 	np.random.seed(random_seed)
 
@@ -145,8 +147,10 @@ def hyperparameter_scan(train_methyl_array,
 		opts['torque']=''
 	if gpu:
 		opts['gpu']=''
+	if optimize_time:
+		opts['optimize_time']=''
 	additional_opts=dict(additional_command=additional_command,
-							additional_options=additional_options)
+						additional_options=additional_options)
 	for job in [np.random.randint(0,10000000) for i in range(n_jobs)]:
 		opts['job']=job
 		command='python hyperparameter_job.py hyperparameter_job {} {}'.format(' '.join(['--{} {}'.format(k,v) for k,v in opts.items()]),' '.join(['--{} "{}"'.format(k,v) for k,v in additional_opts.items()]))
