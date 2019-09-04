@@ -8,6 +8,7 @@ import sqlite3
 import click
 from methylnet.torque_jobs import assemble_run_torque
 import time
+import pysnooper
 #from dask.distributed import Client, as_completed
 from methylcaps_train_ import *
 
@@ -91,25 +92,8 @@ def return_val_loss(command, torque, total_time, delay_time, job, gpu, additiona
 
 	return val_loss
 
-@hypscan.command()
-@click.option('-i', '--train_methyl_array', default='./train_val_test_sets/train_methyl_array.pkl', help='Input database for beta and phenotype data.', type=click.Path(exists=False), show_default=True)
-@click.option('-v', '--val_methyl_array', default='./train_val_test_sets/val_methyl_array.pkl', help='Test database for beta and phenotype data.', type=click.Path(exists=False), show_default=True)
-@click.option('-ic', '--interest_col', default='disease', help='Specify column looking to make predictions on.', show_default=True)
-@click.option('-nb', '--n_bins', default=0, help='Number of bins if column is continuous variable.', show_default=True)
-@click.option('-cl', '--custom_loss', default='none', help='Specify custom loss function.', show_default=True, type=click.Choice(['none','cox']))
-@click.option('-t', '--torque', is_flag=True, help='Submit jobs on torque.')
-@click.option('-s', '--search_strategy', default='bayes', help='Search strategy.', type=click.Choice(['bayes','random','quasi']))
-@click.option('-tt', '--total_time', default=60, help='Total time to run each job in minutes.', show_default=True)
-@click.option('-dt', '--delay_time', default=60, help='Total time to wait before searching for output job in seconds.', show_default=True)
-@click.option('-gpu', '--gpu', is_flag=True, help='If torque submit, which gpu to use.')
-@click.option('-a', '--additional_command', default='', help='Additional command to input for torque run.', type=click.Path(exists=False))
-@click.option('-ao', '--additional_options', default='', help='Additional options to input for torque run.', type=click.Path(exists=False))
-@click.option('-u', '--update', is_flag=True, help='Update in script.')
-@click.option('-ne', '--n_epochs', default=10, help='Number of epochs. Setting to 0 induces scan of epochs.')
-@click.option('-j', '--job', default=42, help='Job name.')
-@click.option('-srv', '--survival', is_flag=True, help='Scan parameters for survival analysis.')
-@click.option('-ot', '--optimize_time', is_flag=True, help='Optimize model for compute time.')
-def hyperparameter_job(train_methyl_array,
+@pysnooper.snoop('hypjob.log')
+def hyperparameter_job_(train_methyl_array,
 						val_methyl_array,
 						interest_col,
 						n_bins,
@@ -125,7 +109,8 @@ def hyperparameter_job(train_methyl_array,
 						n_epochs,
 						job,
 						survival,
-						optimize_time):
+						optimize_time,
+						random_state):
 
 	additional_params=dict(train_methyl_array=train_methyl_array,
 							val_methyl_array=val_methyl_array,
@@ -207,9 +192,10 @@ def hyperparameter_job(train_methyl_array,
 	sampler_opts={}
 
 	if optimization_method in ['random']:
-		sampler_opts['random_state']=42
+		sampler_opts['n_bootstrap']=10000
+		#sampler_opts['random_state']=random_state
 	elif optimization_method in ['quasi']:
-		sampler_opts['seed']=42
+		sampler_opts['seed']=random_state
 		sampler_opts['skip']=3
 	elif optimization_method in ['bayes']:
 		sampler_opts['n_bootstrap']=35
@@ -217,11 +203,14 @@ def hyperparameter_job(train_methyl_array,
 		sampler_opts['xi']=0.1
 		#sampler_opts['random_state']=42
 
-	optimizer = dict(random=choco.Random,quasi=choco.QuasiRandom,bayes=choco.Bayes)[optimization_method]
+	#print(optimization_method)
+	optimizer = dict(random=choco.Bayes,quasi=choco.QuasiRandom,bayes=choco.Bayes)[optimization_method] # Random
 
 	hyp_conn = choco.SQLiteConnection(url="sqlite:///hyperparameter_scan.db")
 
 	sampler = optimizer(hyp_conn, grid, **sampler_opts)
+
+	#print(sampler)
 
 	if 0 and optimization_method in ['bayes']:
 		sampler.random_state=np.random.RandomState(42)
@@ -230,8 +219,67 @@ def hyperparameter_job(train_methyl_array,
 
 	loss=score_loss(params)
 
-	#if (loss if not optimize_time else loss[0])>=0:
-	sampler.update(token, loss)
+	if (loss if not optimize_time else loss[0])>=0:
+		sampler.update(token, loss)
+
+
+@hypscan.command()
+@click.option('-i', '--train_methyl_array', default='./train_val_test_sets/train_methyl_array.pkl', help='Input database for beta and phenotype data.', type=click.Path(exists=False), show_default=True)
+@click.option('-v', '--val_methyl_array', default='./train_val_test_sets/val_methyl_array.pkl', help='Test database for beta and phenotype data.', type=click.Path(exists=False), show_default=True)
+@click.option('-ic', '--interest_col', default='disease', help='Specify column looking to make predictions on.', show_default=True)
+@click.option('-nb', '--n_bins', default=0, help='Number of bins if column is continuous variable.', show_default=True)
+@click.option('-cl', '--custom_loss', default='none', help='Specify custom loss function.', show_default=True, type=click.Choice(['none','cox']))
+@click.option('-t', '--torque', is_flag=True, help='Submit jobs on torque.')
+@click.option('-s', '--search_strategy', default='bayes', help='Search strategy.', type=click.Choice(['bayes','random','quasi']))
+@click.option('-tt', '--total_time', default=60, help='Total time to run each job in minutes.', show_default=True)
+@click.option('-dt', '--delay_time', default=60, help='Total time to wait before searching for output job in seconds.', show_default=True)
+@click.option('-gpu', '--gpu', is_flag=True, help='If torque submit, which gpu to use.')
+@click.option('-a', '--additional_command', default='', help='Additional command to input for torque run.', type=click.Path(exists=False))
+@click.option('-ao', '--additional_options', default='', help='Additional options to input for torque run.', type=click.Path(exists=False))
+@click.option('-u', '--update', is_flag=True, help='Update in script.')
+@click.option('-ne', '--n_epochs', default=10, help='Number of epochs. Setting to 0 induces scan of epochs.')
+@click.option('-j', '--job', default=42, help='Job name.')
+@click.option('-srv', '--survival', is_flag=True, help='Scan parameters for survival analysis.')
+@click.option('-ot', '--optimize_time', is_flag=True, help='Optimize model for compute time.')
+@click.option('-rs', '--random_state', default=42, help='Random state.')
+def hyperparameter_job(train_methyl_array,
+						val_methyl_array,
+						interest_col,
+						n_bins,
+						custom_loss,
+						torque,
+						search_strategy,
+						total_time,
+						delay_time,
+						gpu,
+						additional_command,
+						additional_options,
+						update,
+						n_epochs,
+						job,
+						survival,
+						optimize_time,
+						random_state):
+
+	hyperparameter_job_(train_methyl_array,
+							val_methyl_array,
+							interest_col,
+							n_bins,
+							custom_loss,
+							torque,
+							search_strategy,
+							total_time,
+							delay_time,
+							gpu,
+							additional_command,
+							additional_options,
+							update,
+							n_epochs,
+							job,
+							survival,
+							optimize_time,
+							random_state)
+
 
 
 if __name__=='__main__':

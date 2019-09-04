@@ -16,8 +16,10 @@ import pickle
 import pysnooper
 from torch.autograd import Variable
 from functools import reduce
+from torch.nn import BatchNorm1d
 #from sksurv.linear_model.coxph import BreslowEstimator
 from sklearn.utils.class_weight import compute_class_weight
+from apex import amp
 RANDOM_SEED=42
 np.random.seed(RANDOM_SEED)
 torch.manual_seed(RANDOM_SEED)
@@ -72,14 +74,14 @@ class CoxLoss(nn.Module):
 		return loss.mean(0)
 
 class MLP(nn.Module): # add latent space extraction, and spits out csv line of SQL as text for UMAP
-	def __init__(self, n_input, hidden_topology, dropout_p, n_outputs=1, binary=False, softmax=False, relu=True):
+	def __init__(self, n_input, hidden_topology, dropout_p=0., n_outputs=1, binary=False, softmax=False, relu=True):
 		super(MLP,self).__init__()
 		self.hidden_topology=hidden_topology
 		self.topology = [n_input]+hidden_topology+[n_outputs]
 		layers = [nn.Linear(self.topology[i],self.topology[i+1]) for i in range(len(self.topology)-2)]
 		for layer in layers:
 			torch.nn.init.xavier_uniform_(layer.weight)
-		self.layers = [nn.Sequential(layer,nn.ReLU(),nn.Dropout(p=dropout_p)) for layer in layers]
+		self.layers = [nn.Sequential(layer,nn.ReLU(),nn.BatchNorm1d(layer.out_features)) for layer in layers]
 		self.output_layer = nn.Linear(self.topology[-2],self.topology[-1])
 		torch.nn.init.xavier_uniform_(self.output_layer.weight)
 		if binary:
@@ -236,6 +238,7 @@ class CapsNet(nn.Module):
 		loss = loss.sum(dim=1).mean()
 		return loss
 
+	#@pysnooper.snoop('loss.log')
 	def calculate_loss(self, x_orig, x_hat, y_pred, y_true, weights=1.):
 		margin_loss = self.margin_loss(y_pred, y_true, weights=weights) # .expand_as(y_true)???
 		recon_loss = self.gamma*self.recon_loss(x_orig.squeeze(1),x_hat)
@@ -248,6 +251,7 @@ class Trainer:
 		self.validation_dataloader = validation_dataloader
 		self.lr = lr
 		self.optimizer = Adam(self.capsnet.parameters(),self.lr)
+		self.capsnet, self.optimizer = amp.initialize(self.capsnet, self.optimizer, opt_level='O0')
 		self.scheduler=CosineAnnealingLR(self.optimizer, T_max=10, eta_min=0, last_epoch=-1)
 		self.n_epochs = n_epochs
 		self.module_names = self.validation_dataloader.dataset.module_names
@@ -312,7 +316,9 @@ class Trainer:
 			loss,margin_loss,recon_loss=self.capsnet.calculate_loss(x_orig, x_hat, y_pred, y_true, weights=self.weights)
 			#loss=loss+self.gamma2*self.compute_custom_loss(y_pred, y_true, y_true_orig)
 			self.optimizer.zero_grad()
-			loss.backward()
+			with amp.scale_loss(loss,self.optimizer) as scaled_loss:
+				scaled_loss.backward()
+			#loss.backward()
 			self.optimizer.step()
 			Y['true'].extend(y_true.argmax(1).detach().cpu().numpy().flatten().astype(int).tolist())
 			Y['pred'].extend(F.softmax(torch.sqrt((y_pred**2).sum(2))).argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())

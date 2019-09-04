@@ -142,7 +142,8 @@ def hyperparameter_scan(train_methyl_array,
 							custom_loss=custom_loss,
 							search_strategy=search_strategy,
 							total_time=total_time,
-							delay_time=delay_time)
+							delay_time=delay_time,
+							random_state=random_seed)
 	if torque and not update:
 		opts['torque']=''
 	if gpu:
