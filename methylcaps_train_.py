@@ -66,7 +66,8 @@ def train_capsnet_(train_methyl_array,
 					overlap,
 					custom_loss,
 					gamma2,
-					job):
+					job,
+					cpg_set_choice='genomic_custom'):
 
 	hlt_list=filter(None,hidden_topology.split(','))
 	if hlt_list:
@@ -82,10 +83,7 @@ def train_capsnet_(train_methyl_array,
 	hidden_caps_layers=[]
 	include_last=False
 
-	overlap=int(overlap*bin_len)
 
-	if not os.path.exists('hg19.{}.overlap.{}.bed'.format(bin_len,overlap)):
-		BedTool('hg19.genome').makewindows(g='hg19.genome',w=bin_len,s=bin_len-overlap).saveas('hg19.{}.overlap.{}.bed'.format(bin_len,overlap))#.to_dataframe().shape
 
 	ma=MethylationArray.from_pickle(train_methyl_array)
 	ma_v=MethylationArray.from_pickle(val_methyl_array)
@@ -96,8 +94,17 @@ def train_capsnet_(train_methyl_array,
 	except:
 		pass
 
-	final_modules,modulecpgs,module_names=get_final_modules(ma=ma,b='hg19.{}.overlap.{}.bed'.format(bin_len,overlap),include_last=include_last, min_capsule_len=min_capsule_len)
-	print('LEN_MODULES',len(final_modules))
+	if cpg_set_choice=='genomic_custom':
+
+		overlap=int(overlap*bin_len)
+		genome_file='hg19.genome'
+		gname=genome_file.split('.')[0]
+		annotation_file='450kannotations.bed'
+		if not os.path.exists('{}.{}.overlap.{}.bed'.format(gname,bin_len,overlap)):
+			BedTool(genome_file).makewindows(g=genome_file,w=bin_len,s=bin_len-overlap).saveas('{}.{}.overlap.{}.bed'.format(gname,bin_len,overlap))#.to_dataframe().shape
+
+		final_modules,modulecpgs,module_names=get_final_modules(ma=ma,a=annotation_file,b='{}.{}.overlap.{}.bed'.format(gname,bin_len,overlap),include_last=include_last, min_capsule_len=min_capsule_len)
+		print('LEN_MODULES',len(final_modules))
 
 	if not include_last:
 		ma.beta=ma.beta.loc[:,modulecpgs]

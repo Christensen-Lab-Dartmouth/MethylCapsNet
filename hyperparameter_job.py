@@ -137,6 +137,9 @@ def hyperparameter_job(train_methyl_array,
 	if n_epochs:
 		additional_params['n_epochs']=n_epochs
 
+	if not survival:
+		additional_params['gamma2']=1e-2
+
 	def score_loss(params):
 		#job=np.random.randint(0,1000000)
 		start_time=time.time()
@@ -225,7 +228,7 @@ def hyperparameter_job(train_methyl_array,
 
 	loss=score_loss(params)
 
-	if loss[0]>=0:
+	if (loss if not optimize_time else loss[0])>=0:
 		sampler.update(token, loss)
 
 
