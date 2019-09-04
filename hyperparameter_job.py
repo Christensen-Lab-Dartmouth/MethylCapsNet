@@ -201,7 +201,7 @@ def hyperparameter_job(train_methyl_array,
 	if not survival:
 		grid.pop('gamma2')
 
-	optimization_method = 'bayes'
+	optimization_method = search_strategy#'bayes'
 	optimization_methods=['random','quasi','bayes']
 
 	sampler_opts={}
@@ -212,7 +212,9 @@ def hyperparameter_job(train_methyl_array,
 		sampler_opts['seed']=42
 		sampler_opts['skip']=3
 	elif optimization_method in ['bayes']:
-		sampler_opts['n_bootstrap']=10
+		sampler_opts['n_bootstrap']=35
+		sampler_opts['utility_function']='ei'
+		sampler_opts['xi']=0.1
 		#sampler_opts['random_state']=42
 
 	optimizer = dict(random=choco.Random,quasi=choco.QuasiRandom,bayes=choco.Bayes)[optimization_method]
@@ -228,8 +230,8 @@ def hyperparameter_job(train_methyl_array,
 
 	loss=score_loss(params)
 
-	if (loss if not optimize_time else loss[0])>=0:
-		sampler.update(token, loss)
+	#if (loss if not optimize_time else loss[0])>=0:
+	sampler.update(token, loss)
 
 
 if __name__=='__main__':
