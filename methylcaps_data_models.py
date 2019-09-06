@@ -9,12 +9,13 @@ import copy, os
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.optim import Adam
 from torch.utils.data import Dataset, DataLoader
+from torch import tensor
 from sklearn.decomposition import PCA
 import plotly.offline as py
 import plotly.express as px
 import pickle
 import pysnooper
-from torch.autograd import Variable
+from torch.autograd import Variable, detect_anomaly
 from functools import reduce
 from torch.nn import BatchNorm1d
 #from sksurv.linear_model.coxph import BreslowEstimator
@@ -26,6 +27,25 @@ torch.manual_seed(RANDOM_SEED)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 torch.multiprocessing.set_sharing_strategy('file_system')
+
+class BCEWithNan(object):
+	def __init__ (self, loss_function=nn.BCEWithLogitsLoss(reduce=False)):
+		self.loss_function = loss_function
+		self.replace_val=tensor([0.])
+		if torch.cuda.is_available():
+			self.replace_val=self.replace_val.cuda()
+
+	def __call__ (self, y_hat, target, reduce=True):
+		loss = self.loss_function(y_hat, target)
+		d = torch.sum(~(torch.isnan(loss)), dim=1, keepdim=True).float()
+		loss = torch.where(torch.isnan(loss), self.replace_val, loss)
+		loss = torch.sum(loss, dim=1, keepdim=True) / d
+
+		if reduce:
+			return torch.mean(loss)
+		else:
+			return loss
+
 
 class MethylationDataset(Dataset):
 	def __init__(self, methyl_arr, outcome_col,binarizer=None, modules=[], module_names=None, original_interest_col=None):
@@ -188,7 +208,7 @@ class CapsNet(nn.Module):
 		self.caps_hidden_layers=caps_hidden_layers
 		self.caps_output_layer=caps_output_layer
 		self.decoder=decoder
-		self.recon_loss_fn = nn.BCEWithLogitsLoss() # WithLogits
+		self.recon_loss_fn = BCEWithNan()#nn.BCEWithLogitsLoss() # WithLogits https://github.com/shllln/BCEWithNan
 		self.lr_balance=lr_balance
 		self.gamma=gamma
 
@@ -251,7 +271,7 @@ class Trainer:
 		self.validation_dataloader = validation_dataloader
 		self.lr = lr
 		self.optimizer = Adam(self.capsnet.parameters(),self.lr)
-		self.capsnet, self.optimizer = amp.initialize(self.capsnet, self.optimizer, opt_level='O0')
+		self.capsnet, self.optimizer = amp.initialize(self.capsnet, self.optimizer, opt_level='O0', loss_scale=1.0)#'dynamic'
 		self.scheduler=CosineAnnealingLR(self.optimizer, T_max=10, eta_min=0, last_epoch=-1)
 		self.n_epochs = n_epochs
 		self.module_names = self.validation_dataloader.dataset.module_names
@@ -316,7 +336,7 @@ class Trainer:
 			loss,margin_loss,recon_loss=self.capsnet.calculate_loss(x_orig, x_hat, y_pred, y_true, weights=self.weights)
 			#loss=loss+self.gamma2*self.compute_custom_loss(y_pred, y_true, y_true_orig)
 			self.optimizer.zero_grad()
-			with amp.scale_loss(loss,self.optimizer) as scaled_loss:
+			with amp.scale_loss(loss,self.optimizer) as scaled_loss, detect_anomaly():
 				scaled_loss.backward()
 			#loss.backward()
 			self.optimizer.step()
