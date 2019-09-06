@@ -1,6 +1,9 @@
 include *.bed
 include *.genome
 include *.p
+include methylcapsnet/*.bed
+include methylcapsnet/*.genome
+include methylcapsnet/*.p
 include methylcapsnet/data/*.bed
 include methylcapsnet/data/*.genome
 include methylcapsnet/data/*.p
