@@ -20,6 +20,6 @@ setup(name='methylcapsnet',
       packages=['methylcapsnet'],
       install_requires=['methylnet',
                         'chocolate',
-                        'pybedtools'
-                        ],
+                        'pybedtools',
+                        'plotly-express'],
       package_data={'methylcapsnet': ['data/*']})

@@ -158,13 +158,13 @@ class CapsLayer(nn.Module):
 		W = torch.cat([self.W] * batch_size, dim=0)
 		#print('affine',W.size(),x.size())
 		u_hat = torch.matmul(W, x)
+		self.u_hat=copy.deepcopy(u_hat.squeeze(4).detach().cpu())
 		#print('affine_trans',u_hat.size())
 
 		b_ij = Variable(torch.zeros(1, self.num_routes, self.n_capsules, 1))
 
 		if torch.cuda.is_available():
 			b_ij=b_ij.cuda()
-
 
 		for iteration in range(self.routing_iterations):
 			self.c_ij = softmax(b_ij)
@@ -184,6 +184,9 @@ class CapsLayer(nn.Module):
 
 	def return_routing_coef(self):
 		return self.c_ij
+
+	def return_embedding_previous_layer(self):
+		return self.u_hat.numpy()[...,0]
 
 	#@staticmethod
 	def squash(self,x):
@@ -290,7 +293,7 @@ class Trainer:
 			return loss
 
 	def initialize_dirs(self):
-		for d in ['figures/embeddings'+x for x in ['','2','3']]:
+		for d in ['figures/{}'.format(x) for x in ['embedding_primarycaps_aligned','embedding_primarycaps','embedding_primarycaps_cat','embedding_outputcaps']]:
 			os.makedirs(d,exist_ok=True)
 		os.makedirs('results/routing_weights',exist_ok=True)
 
@@ -362,7 +365,7 @@ class Trainer:
 	def val_test_loop(self, dataloader):
 		self.capsnet.train(False)
 		running_loss=np.zeros((3,)).astype(float)
-		Y={'true':[],'pred':[],'embeddings':[],'embeddings2':[],'embeddings3':[],'routing_weights':[]}
+		Y={'true':[],'pred':[],'embedding_primarycaps_aligned':[],'embedding_primarycaps':[],'embedding_primarycaps_cat':[],'embedding_outputcaps':[],'routing_weights':[]}
 		with torch.no_grad():
 			for i,batch in enumerate(dataloader):
 				x_orig=batch[0]
@@ -385,10 +388,11 @@ class Trainer:
 					Y['routing_weights']=pd.DataFrame(routing_coefs[0,...,0].T,index=dataloader.dataset.binarizer.classes_,columns=dataloader.dataset.module_names)
 				else:
 					Y['routing_weights']+=pd.DataFrame(routing_coefs[0,...,0].T,index=dataloader.dataset.binarizer.classes_,columns=dataloader.dataset.module_names)
-				Y['embeddings3'].append(torch.cat([primary_caps_out[i] for i in range(x_orig.size(0))],dim=0).detach().cpu().numpy())
+				Y['embedding_primarycaps'].append(torch.cat([primary_caps_out[i] for i in range(x_orig.size(0))],dim=0).detach().cpu().numpy())
 				primary_caps_out=primary_caps_out.view(primary_caps_out.size(0),primary_caps_out.size(1)*primary_caps_out.size(2))
-				Y['embeddings'].append(embedding.detach().cpu().numpy())
-				Y['embeddings2'].append(primary_caps_out.detach().cpu().numpy())
+				Y['embedding_outputcaps'].append(embedding.detach().cpu().numpy())
+				Y['embedding_primarycaps_cat'].append(primary_caps_out.detach().cpu().numpy())
+				Y['embedding_primarycaps_aligned'].append(self.capsnet.caps_output_layer.return_embedding_previous_layer())
 				Y['true'].extend(y_true.argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
 				Y['pred'].extend((y_pred**2).sum(2).argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
 			running_loss/=(i+1)
@@ -402,28 +406,20 @@ class Trainer:
 		return running_loss, Y
 
 	def make_plots(self, Y, dataloader):
-		Y['embeddings']=pd.DataFrame(PCA(n_components=2).fit_transform(np.vstack(Y['embeddings'])),columns=['x','y'])
-		Y['embeddings2']=pd.DataFrame(PCA(n_components=2).fit_transform(np.vstack(Y['embeddings2'])),columns=['x','y'])
-		Y['embeddings3']=pd.DataFrame(PCA(n_components=2).fit_transform(np.vstack(Y['embeddings3'])),columns=['x','y'])#'z'
-		Y['embeddings']['color']=Y['true']
-		Y['embeddings2']['color']=Y['true']
-		Y['embeddings3']['color']=self.module_names*dataloader.dataset.y.shape[0]#ma_v.beta.shape[0]#Y['true']
-		Y['embeddings3']['name']=list(reduce(lambda x,y:x+y,[[i]*self.n_primary for i in Y['true']]))
-		fig = px.scatter(Y['embeddings3'], x="x", y="y", color="color", symbol='name')#, text='name')
-		py.plot(fig, filename='figures/embeddings3/embeddings3.{}.pos.html'.format(self.epoch),auto_open=False)
-		#Y['embeddings3']['color']=list(reduce(lambda x,y:x+y,[[i]*n_primary for i in Y['true']]))
-		fig = px.scatter(Y['embeddings3'], x="x", y="y", color="name")#, text='color')
-		py.plot(fig, filename='figures/embeddings3/embeddings3.{}.true.html'.format(self.epoch),auto_open=False)
-		fig = px.scatter(Y['embeddings'], x="x", y="y", color="color")
-		py.plot(fig, filename='figures/embeddings/embeddings.{}.true.html'.format(self.epoch),auto_open=False)
-		fig = px.scatter(Y['embeddings2'], x="x", y="y", color="color")
-		py.plot(fig, filename='figures/embeddings2/embeddings2.{}.true.html'.format(self.epoch),auto_open=False)
-		Y['embeddings'].loc[:,'color']=Y['pred']
-		Y['embeddings2'].loc[:,'color']=Y['pred']
-		fig = px.scatter(Y['embeddings'], x="x", y="y", color="color")
-		py.plot(fig, filename='figures/embeddings/embeddings.{}.pred.html'.format(self.epoch),auto_open=False)
-		fig = px.scatter(Y['embeddings2'], x="x", y="y", color="color")
-		py.plot(fig, filename='figures/embeddings2/embeddings2.{}.pred.html'.format(self.epoch),auto_open=False)
+		for k in ['embedding_primarycaps','embedding_primarycaps_aligned']:
+			Y[k]=pd.DataFrame(PCA(n_components=2).fit_transform(np.vstack(Y[k])),columns=['x','y'])
+			Y[k]['pos']=self.module_names*dataloader.dataset.y.shape[0]#ma_v.beta.shape[0]#Y['true']
+			Y[k]['true']=list(reduce(lambda x,y:x+y,[[self.module_names[i]]*self.n_primary for i in Y['true']]))
+			for k2 in ['pos','true']:
+				fig = px.scatter(Y[k], x="x", y="y", color=k2)#, text='color')
+				py.plot(fig, filename='figures/{0}/{0}.{1}.{2}.html'.format(k,self.epoch,k2),auto_open=False)
+
+		for k in ['embedding_outputcaps','embedding_primarycaps_cat']:
+			Y[k]=pd.DataFrame(PCA(n_components=2).fit_transform(np.vstack(Y[k])),columns=['x','y'])
+			for k2 in ['true','pred']:
+				Y[k]['color']=Y[k2]
+				fig = px.scatter(Y[k], x="x", y="y", color="color")
+				py.plot(fig, filename='figures/{0}/{0}.{1}.{2}.html'.format(k,self.epoch,k2),auto_open=False)
 
 	def save_routing_weights(self, Y):
 		pickle.dump(Y['routing_weights'],open('results/routing_weights/routing_weights.{}.p'.format(self.epoch),'wb'))
