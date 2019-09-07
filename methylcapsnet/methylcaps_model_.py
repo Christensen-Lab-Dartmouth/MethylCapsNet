@@ -26,7 +26,7 @@ np.random.seed(RANDOM_SEED)
 torch.manual_seed(RANDOM_SEED)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
-methylcaps_dir=os.dirname(methylcapsnet.__file__)
+methylcaps_dir=os.path.dirname(methylcapsnet.__file__)
 annotations450 = os.path.join(methylcaps_dir, 'data/450kannotations.bed')
 hg19 = os.path.join(methylcaps_dir, 'data/hg19.genome')
 selected_caps_file = os.path.join(methylcaps_dir, 'data/selected_capsules.p')
