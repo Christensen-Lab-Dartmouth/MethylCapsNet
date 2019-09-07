@@ -129,7 +129,7 @@ def model_capsnet_(train_methyl_array,
 	if 'genomic_binned' in capsule_choice:
 		overlap=int(overlap*bin_len)
 		genome_file=hg19
-		gname=genome_file.split('.')[0]
+		gname=os.path.basename(genome_file.split('.')[0])
 
 		if not os.path.exists('{}.{}.overlap.{}.bed'.format(gname,bin_len,overlap)):
 			BedTool(genome_file).makewindows(g=genome_file,w=bin_len,s=bin_len-overlap).saveas('{}.{}.overlap.{}.bed'.format(gname,bin_len,overlap))#.to_dataframe().shape
