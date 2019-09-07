@@ -112,7 +112,8 @@ def hyperparameter_job_(train_methyl_array,
 						optimize_time,
 						random_state,
 						capsule_choice,
-						custom_capsule_file):
+						custom_capsule_file,
+						retrain_top_job):
 
 	additional_params=dict(train_methyl_array=train_methyl_array,
 							val_methyl_array=val_methyl_array,
