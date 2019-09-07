@@ -90,7 +90,7 @@ def model_capsnet_(train_methyl_array,
 					gamma2,
 					job,
 					capsule_choice,
-					custom_capsule_file,
+					custom_capsule_file='',
 					test_methyl_array='',
 					predict=False):
 
