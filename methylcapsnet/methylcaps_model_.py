@@ -41,7 +41,7 @@ print_if_exists(annotations450)
 print_if_exists(hg19)
 print_if_exists(selected_caps_file)
 
-#@pysnooper.snoop('get_mod.log')
+@pysnooper.snoop('get_mod.log')
 def get_binned_modules(ma=None,a=annotations450,b='lola_vignette_data/activeDHS_universe.bed', include_last=False, min_capsule_len=2000):
 	allcpgs=ma.beta.columns.values
 	df=BedTool(a).to_dataframe()
