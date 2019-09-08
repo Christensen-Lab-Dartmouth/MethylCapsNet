@@ -39,7 +39,7 @@ hg19 = os.path.abspath(os.path.join(methylcaps_dir, 'data/hg19.genome'))
 selected_caps_file = os.path.abspath(os.path.join(methylcaps_dir, 'data/selected_capsules.p'))
 print_if_exists(annotations450)
 print_if_exists(hg19)
-print_if_exists(elected_caps_file)
+print_if_exists(selected_caps_file)
 
 #@pysnooper.snoop('get_mod.log')
 def get_binned_modules(ma=None,a=annotations450,b='lola_vignette_data/activeDHS_universe.bed', include_last=False, min_capsule_len=2000):
