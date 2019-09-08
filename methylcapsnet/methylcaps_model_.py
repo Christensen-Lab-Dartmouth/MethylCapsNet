@@ -26,10 +26,20 @@ np.random.seed(RANDOM_SEED)
 torch.manual_seed(RANDOM_SEED)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
+
+def print_if_exists(f):
+	if os.path.exists(f):
+		print('{} does exist'.format(f))
+	else:
+		print('{} does not exist'.format(f))
+
 methylcaps_dir=os.path.dirname(methylcapsnet.__file__)
 annotations450 = os.path.abspath(os.path.join(methylcaps_dir, 'data/450kannotations.bed'))
 hg19 = os.path.abspath(os.path.join(methylcaps_dir, 'data/hg19.genome'))
 selected_caps_file = os.path.abspath(os.path.join(methylcaps_dir, 'data/selected_capsules.p'))
+print_if_exists(annotations450)
+print_if_exists(hg19)
+print_if_exists(elected_caps_file)
 
 #@pysnooper.snoop('get_mod.log')
 def get_binned_modules(ma=None,a=annotations450,b='lola_vignette_data/activeDHS_universe.bed', include_last=False, min_capsule_len=2000):
@@ -130,11 +140,12 @@ def model_capsnet_(train_methyl_array,
 		overlap=int(overlap*bin_len)
 		genome_file=hg19
 		gname=os.path.basename(genome_file.split('.')[0])
-
-		if not os.path.exists('{}.{}.overlap.{}.bed'.format(gname,bin_len,overlap)):
+		overlap_file='{}.{}.overlap.{}.bed'.format(gname,bin_len,overlap)
+		if not os.path.exists(overlap_file):
 			BedTool(genome_file).makewindows(g=genome_file,w=bin_len,s=bin_len-overlap).saveas('{}.{}.overlap.{}.bed'.format(gname,bin_len,overlap))#.to_dataframe().shape
+		print(annotation_file,overlap_file)
 		#print('LEN_MODULES',len(final_modules))
-		final_modules,modulecpgs,module_names=get_binned_modules(ma=ma,a=annotation_file,b='{}.{}.overlap.{}.bed'.format(gname,bin_len,overlap),include_last=include_last, min_capsule_len=min_capsule_len)
+		final_modules,modulecpgs,module_names=get_binned_modules(ma=ma,a=annotation_file,b=overlap_file,include_last=include_last, min_capsule_len=min_capsule_len)
 		capsules.extend(final_modules)
 		finalcpgs.extend(modulecpgs)
 		capsule_names.extend(module_names)
