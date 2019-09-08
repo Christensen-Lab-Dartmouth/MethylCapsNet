@@ -45,7 +45,7 @@ print_if_exists(selected_caps_file)
 def get_binned_modules(ma=None,a=annotations450,b='lola_vignette_data/activeDHS_universe.bed', include_last=False, min_capsule_len=2000):
 	allcpgs=ma.beta.columns.values
 	df=BedTool(a).to_dataframe()
-	df.iloc[:,0]=df.iloc[:,0].astype(str).map(lambda x: 'chr'+x.split('.')[0])
+	df.iloc[:,0]=df.iloc[:,0].astype(str)#.map(lambda x: 'chr'+x.split('.')[0])
 	df=df.set_index('name').loc[list(ma.beta)].reset_index().iloc[:,[1,2,3,0]]
 	df_bed=pd.read_table(b,header=None)
 	df_bed['features']=np.arange(df_bed.shape[0])
@@ -139,7 +139,7 @@ def model_capsnet_(train_methyl_array,
 	if 'genomic_binned' in capsule_choice:
 		overlap=int(overlap*bin_len)
 		genome_file=hg19
-		gname=os.path.basename(genome_file.split('.')[0])
+		gname=os.path.basename(genome_file).split('.')[0]
 		overlap_file='{}.{}.overlap.{}.bed'.format(gname,bin_len,overlap)
 		if not os.path.exists(overlap_file):
 			BedTool(genome_file).makewindows(g=genome_file,w=bin_len,s=bin_len-overlap).saveas('{}.{}.overlap.{}.bed'.format(gname,bin_len,overlap))#.to_dataframe().shape
