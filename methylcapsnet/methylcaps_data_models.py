@@ -417,7 +417,7 @@ class Trainer:
 		for k in ['embedding_primarycaps','embedding_primarycaps_aligned']:
 			Y[k]=pd.DataFrame(PCA(n_components=2).fit_transform(np.vstack(Y[k])),columns=['x','y'])
 			Y[k]['pos']=self.module_names*dataloader.dataset.y.shape[0]#ma_v.beta.shape[0]#Y['true']
-			Y[k]['true']=list(reduce(lambda x,y:x+y,[[self.module_names[int(i)]]*self.n_primary for i in Y['true']]))
+			Y[k]['true']=list(reduce(lambda x,y:x+y,[[i]*self.n_primary for i in Y['true']]))
 			for k2 in ['pos','true']:
 				fig = px.scatter(Y[k], x="x", y="y", color=k2)#, text='color')
 				py.plot(fig, filename='figures/{0}/{0}.{1}.{2}.html'.format(k,self.epoch,k2),auto_open=False)
