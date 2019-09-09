@@ -113,14 +113,16 @@ def hyperparameter_job_(train_methyl_array,
 						random_state,
 						capsule_choice,
 						custom_capsule_file,
-						retrain_top_job):
+						retrain_top_job,
+						batch_size):
 
 	additional_params=dict(train_methyl_array=train_methyl_array,
 							val_methyl_array=val_methyl_array,
 							interest_col=interest_col,
 							n_bins=n_bins,
 							custom_loss=custom_loss,
-							job=job)
+							job=job,
+							batch_size=batch_size)
 
 	if n_epochs:
 		additional_params['n_epochs']=n_epochs
@@ -276,7 +278,8 @@ def hyperparameter_job_(train_methyl_array,
 @click.option('-rs', '--random_state', default=42, help='Random state.')
 @click.option('-cc', '--capsule_choice', default=['genomic_binned'], multiple=True, help='Specify multiple sets of capsules to include. Cannot specify both custom_bed and custom_set.', show_default=True, type=click.Choice(['genomic_binned','custom_bed','custom_set','UCSC_RefGene_Accession', 'UCSC_RefGene_Group', 'UCSC_CpG_Islands_Name', 'Relation_to_UCSC_CpG_Island', 'Phantom', 'DMR', 'Enhancer', 'HMM_Island', 'Regulatory_Feature_Name', 'Regulatory_Feature_Group', 'DHS']))
 @click.option('-cf', '--custom_capsule_file', default='', help='Custom capsule file, bed or pickle.', show_default=True, type=click.Path(exists=False))
-@click.option('-rt', '--retrain_top_job', is_flag=True,  help='Custom capsule file, bed or pickle.', show_default=True, type=click.Path(exists=False))
+@click.option('-rt', '--retrain_top_job', is_flag=True,  help='Retrain top job.', show_default=True, type=click.Path(exists=False))
+@click.option('-bs', '--batch_size', default=16, help='Batch size.', show_default=True)
 def hyperparameter_job(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -297,7 +300,8 @@ def hyperparameter_job(train_methyl_array,
 						random_state,
 						capsule_choice,
 						custom_capsule_file,
-						retrain_top_job):
+						retrain_top_job,
+						batch_size):
 
 	hyperparameter_job_(train_methyl_array,
 							val_methyl_array,
@@ -319,7 +323,8 @@ def hyperparameter_job(train_methyl_array,
 							random_state,
 							capsule_choice,
 							custom_capsule_file,
-							retrain_top_job)
+							retrain_top_job,
+							batch_size)
 
 
 

@@ -116,6 +116,7 @@ def return_val_loss(command, torque, total_time, delay_time, job, gpu, additiona
 @click.option('-cc', '--capsule_choice', default=['genomic_binned'], multiple=True, help='Specify multiple sets of capsules to include. Cannot specify both custom_bed and custom_set.', show_default=True, type=click.Choice(['genomic_binned','custom_bed','custom_set','UCSC_RefGene_Accession', 'UCSC_RefGene_Group', 'UCSC_CpG_Islands_Name', 'Relation_to_UCSC_CpG_Island', 'Phantom', 'DMR', 'Enhancer', 'HMM_Island', 'Regulatory_Feature_Name', 'Regulatory_Feature_Group', 'DHS']))
 @click.option('-cf', '--custom_capsule_file', default='', help='Custom capsule file, bed or pickle.', show_default=True, type=click.Path(exists=False))
 @click.option('-rt', '--retrain_top_job', is_flag=True,  help='Custom capsule file, bed or pickle.', show_default=True, type=click.Path(exists=False))
+@click.option('-bs', '--batch_size', default=16, help='Batch size.', show_default=True)
 def hyperparameter_scan(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -135,7 +136,8 @@ def hyperparameter_scan(train_methyl_array,
 						optimize_time,
 						capsule_choice,
 						custom_capsule_file,
-						retrain_top_job):
+						retrain_top_job,
+						batch_size):
 
 	np.random.seed(random_seed)
 
@@ -149,7 +151,8 @@ def hyperparameter_scan(train_methyl_array,
 							search_strategy=search_strategy,
 							total_time=total_time,
 							delay_time=delay_time,
-							random_state=random_seed)
+							random_state=random_seed,
+							batch_size=batch_size)
 	if torque and not update:
 		opts['torque']=''
 	if gpu:

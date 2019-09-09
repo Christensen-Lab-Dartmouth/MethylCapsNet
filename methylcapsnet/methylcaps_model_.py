@@ -101,7 +101,7 @@ def return_custom_capsules(ma=None,capsule_file=selected_caps_file, capsule_sets
 	return modules,modulecpgs,module_names
 
 
-@pysnooper.snoop('train.log')
+#@pysnooper.snoop('train.log')
 def model_capsnet_(train_methyl_array,
 					val_methyl_array,
 					interest_col,
@@ -123,7 +123,8 @@ def model_capsnet_(train_methyl_array,
 					capsule_choice,
 					custom_capsule_file='',
 					test_methyl_array='',
-					predict=False):
+					predict=False,
+					batch_size=16):
 
 	capsule_choice=list(capsule_choice)
 	#custom_capsule_file=list(custom_capsule_file)
@@ -224,11 +225,11 @@ def model_capsnet_(train_methyl_array,
 
 	dataloaders=dict()
 
-	dataloaders['train']=DataLoader(datasets['train'],batch_size=50,shuffle=True,num_workers=8, pin_memory=True, drop_last=True)
-	dataloaders['val']=DataLoader(datasets['val'],batch_size=50,shuffle=False,num_workers=8, pin_memory=True, drop_last=False)
+	dataloaders['train']=DataLoader(datasets['train'],batch_size=batch_size,shuffle=True,num_workers=8, pin_memory=True, drop_last=True)
+	dataloaders['val']=DataLoader(datasets['val'],batch_size=batch_size,shuffle=False,num_workers=8, pin_memory=True, drop_last=False)
 	n_primary=len(final_modules)
 	if test_methyl_array and predict:
-		dataloaders['test']=DataLoader(datasets['test'],batch_size=50,shuffle=False,num_workers=8, pin_memory=True, drop_last=False)
+		dataloaders['test']=DataLoader(datasets['test'],batch_size=batch_size,shuffle=False,num_workers=8, pin_memory=True, drop_last=False)
 		capsnet=torch.load('capsnet_model.pkl')
 
 	else:
