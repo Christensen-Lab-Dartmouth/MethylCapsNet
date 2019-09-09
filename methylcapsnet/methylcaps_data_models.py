@@ -159,7 +159,7 @@ class CapsLayer(nn.Module):
 		W = torch.cat([self.W] * batch_size, dim=0)
 		#print('affine',W.size(),x.size())
 		u_hat = torch.matmul(W, x)
-		self.u_hat=copy.deepcopy(u_hat.squeeze(4).detach().cpu())
+		self.u_hat=copy.deepcopy(u_hat.squeeze(4))
 		#print('affine_trans',u_hat.size())
 
 		b_ij = Variable(torch.zeros(1, self.num_routes, self.n_capsules, 1))
@@ -187,7 +187,8 @@ class CapsLayer(nn.Module):
 		return self.c_ij
 
 	def return_embedding_previous_layer(self):
-		return self.u_hat.numpy()[...,0]
+		primary_aligned=self.u_hat[...,0]
+		return primary_aligned
 
 	#@staticmethod
 	def squash(self,x):
@@ -402,7 +403,8 @@ class Trainer:
 				primary_caps_out=primary_caps_out.view(primary_caps_out.size(0),primary_caps_out.size(1)*primary_caps_out.size(2))
 				Y['embedding_outputcaps'].append(embedding.detach().cpu().numpy())
 				Y['embedding_primarycaps_cat'].append(primary_caps_out.detach().cpu().numpy())
-				Y['embedding_primarycaps_aligned'].append(self.capsnet.caps_output_layer.return_embedding_previous_layer())
+				primary_caps_aligned=self.capsnet.caps_output_layer.return_embedding_previous_layer()
+				Y['embedding_primarycaps_aligned'].append(torch.cat([primary_caps_aligned[i] for i in range(x_orig.size(0))],dim=0).detach().cpu().numpy())
 				Y['true'].extend(y_true.argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
 				Y['pred'].extend((y_pred**2).sum(2).argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
 			running_loss/=(i+1)
