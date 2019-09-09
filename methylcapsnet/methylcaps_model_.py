@@ -71,6 +71,7 @@ def get_binned_modules(ma=None,a=annotations450,b='lola_vignette_data/activeDHS_
 		c=b.intersect(a,wa=True,wb=True).sort()
 		# c.saveas('c.bed')
 		d=c.groupby(g=[1,2,3,4],c=(8,8),o=('count','distinct'))
+	d.saveas('d.bed')
 	df2=d.to_dataframe()
 	df3=df2.loc[df2.iloc[:,-2]>min_capsule_len]
 	modules = [cpgs.split(',') for cpgs in df3.iloc[:,-1].values]
@@ -161,7 +162,7 @@ def model_capsnet_(train_methyl_array,
 		if not os.path.exists(overlap_file):
 			BedTool(genome_file).makewindows(g=genome_file,w=bin_len,s=bin_len-overlap).saveas('{}.{}.overlap.{}.bed'.format(gname,bin_len,overlap))#.to_dataframe().shape
 		print(annotation_file,overlap_file)
-		#print('LEN_MODULES',len(final_modules))
+		print('LEN_MODULES',len(final_modules))
 		final_modules,modulecpgs,module_names=get_binned_modules(ma=ma,a=annotation_file,b=overlap_file,include_last=include_last, min_capsule_len=min_capsule_len)
 		capsules.extend(final_modules)
 		finalcpgs.extend(modulecpgs)
