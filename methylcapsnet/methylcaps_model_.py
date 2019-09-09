@@ -98,7 +98,7 @@ def return_custom_capsules(ma=None,capsule_file=selected_caps_file, capsule_sets
 	return modules,modulecpgs,module_names
 
 
-#@pysnooper.snoop('train.log')
+@pysnooper.snoop('train.log')
 def model_capsnet_(train_methyl_array,
 					val_methyl_array,
 					interest_col,
@@ -144,13 +144,13 @@ def model_capsnet_(train_methyl_array,
 		ma_t=MethylationArray.from_pickle(test_methyl_array)
 
 
-	try:
-		ma.remove_na_samples(interest_col)
-		ma_v.remove_na_samples(interest_col)
-		if test_methyl_array and predict:
-			ma_t.remove_na_samples(interest_col)
-	except:
-		pass
+	# try:
+	# 	ma.remove_na_samples(interest_col)
+	# 	ma_v.remove_na_samples(interest_col)
+	# 	if test_methyl_array and predict:
+	# 		ma_t.remove_na_samples(interest_col)
+	# except:
+	# 	pass
 
 	capsules,finalcpgs,capsule_names=[],[],[]
 	annotation_file=annotations450
@@ -190,6 +190,8 @@ def model_capsnet_(train_methyl_array,
 	final_modules=capsules
 	modulecpgs=list(set(finalcpgs))
 	module_names=capsule_names
+
+	print(final_modules,modulecpgs,module_names)
 
 	del capsules,finalcpgs,capsule_names
 
