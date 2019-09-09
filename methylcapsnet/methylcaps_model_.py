@@ -48,9 +48,11 @@ def get_binned_modules(ma=None,a=annotations450,b='lola_vignette_data/activeDHS_
 	b=BedTool(b)
 	# a.saveas('a.bed')
 	# b.saveas('b.bed')
-	# df=BedTool(a).to_dataframe()
-	# df.iloc[:,0]=df.iloc[:,0].astype(str)#.map(lambda x: 'chr'+x.split('.')[0])
-	# df=df.set_index('name').loc[list(ma.beta)].reset_index().iloc[:,[1,2,3,0]]
+	a_orig=a
+	df=BedTool(a).to_dataframe()
+	df.iloc[:,0]=df.iloc[:,0].astype(str)#.map(lambda x: 'chr'+x.split('.')[0])
+	df=df.set_index('name').loc[list(ma.beta)].reset_index().iloc[:,[1,2,3,0]]
+	a=BedTool.from_dataframe(df)
 	# df_bed=pd.read_table(b,header=None)
 	# df_bed['features']=np.arange(df_bed.shape[0])
 	# df_bed=df_bed.iloc[:,[0,1,2,-1]]
@@ -65,8 +67,9 @@ def get_binned_modules(ma=None,a=annotations450,b='lola_vignette_data/activeDHS_
 		# c.saveas('c.bed')
 		d=c.groupby(g=[1,2,3,4],c=(8,8),o=('count','distinct'))
 	except:
-		df=BedTool(a).to_dataframe()
+		df=BedTool(a_orig).to_dataframe()
 		df.iloc[:,0]=df.iloc[:,0].astype(str).map(lambda x: 'chr'+x.split('.')[0])
+		df=df.set_index('name').loc[list(ma.beta)].reset_index().iloc[:,[1,2,3,0]]
 		a=BedTool.from_dataframe(df)
 		c=b.intersect(a,wa=True,wb=True).sort()
 		# c.saveas('c.bed')
