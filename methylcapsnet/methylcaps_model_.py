@@ -41,13 +41,13 @@ print_if_exists(annotations450)
 print_if_exists(hg19)
 print_if_exists(selected_caps_file)
 
-@pysnooper.snoop('get_mod.log')
+# @pysnooper.snoop('get_mod.log')
 def get_binned_modules(ma=None,a=annotations450,b='lola_vignette_data/activeDHS_universe.bed', include_last=False, min_capsule_len=2000):
 	allcpgs=ma.beta.columns.values
 	a=BedTool(a)
 	b=BedTool(b)
-	a.saveas('a.bed')
-	b.saveas('b.bed')
+	# a.saveas('a.bed')
+	# b.saveas('b.bed')
 	# df=BedTool(a).to_dataframe()
 	# df.iloc[:,0]=df.iloc[:,0].astype(str)#.map(lambda x: 'chr'+x.split('.')[0])
 	# df=df.set_index('name').loc[list(ma.beta)].reset_index().iloc[:,[1,2,3,0]]
@@ -62,14 +62,14 @@ def get_binned_modules(ma=None,a=annotations450,b='lola_vignette_data/activeDHS_
 	b=BedTool.from_dataframe(df_bed)
 	try:
 		c=b.intersect(a,wa=True,wb=True).sort()
-		c.saveas('c.bed')
+		# c.saveas('c.bed')
 		d=c.groupby(g=[1,2,3,4],c=(8,8),o=('count','distinct'))
 	except:
 		df=BedTool(a).to_dataframe()
 		df.iloc[:,0]=df.iloc[:,0].astype(str).map(lambda x: 'chr'+x.split('.')[0])
 		a=BedTool.from_dataframe(df)
 		c=b.intersect(a,wa=True,wb=True).sort()
-		c.saveas('c.bed')
+		# c.saveas('c.bed')
 		d=c.groupby(g=[1,2,3,4],c=(8,8),o=('count','distinct'))
 	df2=d.to_dataframe()
 	df3=df2.loc[df2.iloc[:,-2]>min_capsule_len]
@@ -216,11 +216,11 @@ def model_capsnet_(train_methyl_array,
 
 	dataloaders=dict()
 
-	dataloaders['train']=DataLoader(dataloaders['train'],batch_size=16,shuffle=True,num_workers=8, drop_last=True)
-	dataloaders['val']=DataLoader(dataloaders['val'],batch_size=16,shuffle=False,num_workers=8, drop_last=False)
+	dataloaders['train']=DataLoader(datasets['train'],batch_size=16,shuffle=True,num_workers=8, drop_last=True)
+	dataloaders['val']=DataLoader(datasets['val'],batch_size=16,shuffle=False,num_workers=8, drop_last=False)
 	n_primary=len(final_modules)
 	if test_methyl_array and predict:
-		dataloaders['test']=DataLoader(dataloaders['test'],batch_size=16,shuffle=False,num_workers=8, drop_last=False)
+		dataloaders['test']=DataLoader(datasets['test'],batch_size=16,shuffle=False,num_workers=8, drop_last=False)
 		capsnet=torch.load('capsnet_model.pkl')
 
 	else:
