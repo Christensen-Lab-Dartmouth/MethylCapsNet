@@ -297,6 +297,7 @@ class Trainer:
 			os.makedirs(d,exist_ok=True)
 		os.makedirs('results/routing_weights',exist_ok=True)
 
+	@pysnooper.snoop('fit_model.log')
 	def fit(self, dataloader):
 		self.initialize_dirs()
 		if self.class_balance:
@@ -325,7 +326,7 @@ class Trainer:
 		test_loss,Y=self.val_test_loop(dataloader)
 		return Y
 
-	#@pysnooper.snoop('train_loop.log')
+	@pysnooper.snoop('train_loop.log')
 	def train_loop(self, dataloader):
 		self.capsnet.train(True)
 		running_loss=0.
@@ -364,6 +365,7 @@ class Trainer:
 		self.scheduler.step()
 		return running_loss
 
+	@pysnooper.snoop('val_loop.log')
 	def val_test_loop(self, dataloader):
 		self.capsnet.train(False)
 		running_loss=np.zeros((3,)).astype(float)
