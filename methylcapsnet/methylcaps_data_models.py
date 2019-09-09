@@ -67,7 +67,7 @@ class MethylationDataset(Dataset):
 	def __len__(self):
 		return self.length
 
-	#@pysnooper.snoop('getitem.log')
+	@pysnooper.snoop('getitem.log')
 	def __getitem__(self,i):
 		X=[torch.FloatTensor(self.X.iloc[i].values)]
 		modules=[torch.FloatTensor(self.X.iloc[i].loc[module].values) for module in self.modules] # .reshape(1,-1)
