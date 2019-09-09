@@ -80,7 +80,7 @@ def get_binned_modules(ma=None,a=annotations450,b='lola_vignette_data/activeDHS_
 		missing_cpgs=np.setdiff1d(allcpgs,modulecpgs).tolist()
 	final_modules = modules+([missing_cpgs] if include_last else [])
 	module_names=(df3.iloc[:,0]+'_'+df3.iloc[:,1].astype(str)+'_'+df3.iloc[:,2].astype(str)).tolist()
-	return final_modules,modulecpgs,module_names
+	return final_modules,modulecpgs.tolist(),module_names
 
 def return_custom_capsules(ma=None,capsule_file=selected_caps_file, capsule_sets=['all'], min_capsule_len=2000, include_last=False):
 	allcpgs=ma.beta.columns.values
@@ -144,13 +144,13 @@ def model_capsnet_(train_methyl_array,
 		ma_t=MethylationArray.from_pickle(test_methyl_array)
 
 
-	# try:
-	# 	ma.remove_na_samples(interest_col)
-	# 	ma_v.remove_na_samples(interest_col)
-	# 	if test_methyl_array and predict:
-	# 		ma_t.remove_na_samples(interest_col)
-	# except:
-	# 	pass
+	try:
+		ma.remove_na_samples(interest_col)
+		ma_v.remove_na_samples(interest_col)
+		if test_methyl_array and predict:
+			ma_t.remove_na_samples(interest_col)
+	except:
+		pass
 
 	capsules,finalcpgs,capsule_names=[],[],[]
 	annotation_file=annotations450
@@ -194,8 +194,8 @@ def model_capsnet_(train_methyl_array,
 	print(len(final_modules),len(modulecpgs),len(module_names),ma.beta.isnull().sum().sum())
 
 	del capsules,finalcpgs,capsule_names
-
-	if not include_last:
+	print(ma.beta.isnull().sum().sum())
+	if not include_last: # ERROR HAPPENS HERE!
 		ma.beta=ma.beta.loc[:,modulecpgs]
 		ma_v.beta=ma_v.beta.loc[:,modulecpgs]
 		if test_methyl_array and predict:
