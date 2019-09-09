@@ -191,7 +191,7 @@ def model_capsnet_(train_methyl_array,
 	modulecpgs=list(set(finalcpgs))
 	module_names=capsule_names
 
-	print(len(final_modules),len(modulecpgs),len(module_names))
+	print(len(final_modules),len(modulecpgs),len(module_names),ma.beta.isnull().sum().sum())
 
 	del capsules,finalcpgs,capsule_names
 
@@ -200,6 +200,7 @@ def model_capsnet_(train_methyl_array,
 		ma_v.beta=ma_v.beta.loc[:,modulecpgs]
 		if test_methyl_array and predict:
 			ma_t.beta=ma_t.beta.loc[:,modulecpgs]
+	print(ma.beta.isnull().sum().sum())
 	# https://github.com/higgsfield/Capsule-Network-Tutorial/blob/master/Capsule%20Network.ipynb
 	original_interest_col=interest_col
 	if n_bins:
@@ -213,6 +214,7 @@ def model_capsnet_(train_methyl_array,
 	datasets=dict()
 
 	datasets['train']=MethylationDataset(ma,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col)
+	print(datasets['train'].X.isnull().sum().sum())
 	datasets['val']=MethylationDataset(ma_v,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col)
 	if test_methyl_array and predict:
 		datasets['test']=MethylationDataset(ma_t,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col)
