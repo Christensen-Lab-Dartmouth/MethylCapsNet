@@ -56,15 +56,19 @@ def get_binned_modules(ma=None,a=annotations450,b='lola_vignette_data/activeDHS_
 	# df_bed=df_bed.iloc[:,[0,1,2,-1]]
 	# b=BedTool.from_dataframe(df)
 	# a=BedTool.from_dataframe(df_bed)#('lola_vignette_data/activeDHS_universe.bed')
+	df_bed=BedTool(b).to_dataframe()
+	if df_bed.shape[1]<4:
+		df_bed['features']=np.arange(df_bed.shape[0])
+	b=BedTool.from_dataframe(df_bed)
 	try:
-		c=a.intersect(b,wa=True,wb=True).sort()
+		c=b.intersect(a,wa=True,wb=True).sort()
 		c.saveas('c.bed')
 		d=c.groupby(g=[1,2,3,4],c=(8,8),o=('count','distinct'))
 	except:
 		df=BedTool(a).to_dataframe()
 		df.iloc[:,0]=df.iloc[:,0].astype(str).map(lambda x: 'chr'+x.split('.')[0])
 		a=BedTool.from_dataframe(df)
-		c=a.intersect(b,wa=True,wb=True).sort()
+		c=b.intersect(a,wa=True,wb=True).sort()
 		c.saveas('c.bed')
 		d=c.groupby(g=[1,2,3,4],c=(8,8),o=('count','distinct'))
 	df2=d.to_dataframe()
