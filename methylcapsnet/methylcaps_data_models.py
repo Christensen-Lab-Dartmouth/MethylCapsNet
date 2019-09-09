@@ -159,7 +159,7 @@ class CapsLayer(nn.Module):
 		W = torch.cat([self.W] * batch_size, dim=0)
 		#print('affine',W.size(),x.size())
 		u_hat = torch.matmul(W, x)
-		self.u_hat=copy.deepcopy(u_hat.squeeze(4))
+		self.u_hat=u_hat.squeeze(4)
 		#print('affine_trans',u_hat.size())
 
 		b_ij = Variable(torch.zeros(1, self.num_routes, self.n_capsules, 1))
