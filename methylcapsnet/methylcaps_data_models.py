@@ -133,10 +133,10 @@ class PrimaryCaps(nn.Module):
 		return self.squash(u)
 
 	#@staticmethod
-	def squash(self, x):
+	def squash(self, x, epsilon=1e-8):
 		squared_norm = (x ** 2).sum(-1, keepdim=True)
 		#print('prim_norm',squared_norm.size())
-		output_tensor = squared_norm *  x / ((1. + squared_norm) * torch.sqrt(squared_norm))
+		output_tensor = squared_norm *  x / ((1. + squared_norm) * torch.sqrt(squared_norm+epsilon))
 		#print('z_init',output_tensor.size())
 		return output_tensor
 
@@ -191,11 +191,11 @@ class CapsLayer(nn.Module):
 		return primary_aligned
 
 	#@staticmethod
-	def squash(self,x):
+	def squash(self,x, epsilon=1e-8):
 		#print(x.size())
 		squared_norm = (x ** 2).sum(-1, keepdim=True)
 		#print('norm',squared_norm.size())
-		output_tensor = squared_norm *  x / ((1. + squared_norm) * torch.sqrt(squared_norm))
+		output_tensor = squared_norm *  x / ((1. + squared_norm) * torch.sqrt(squared_norm+epsilon))
 		return output_tensor
 
 class Decoder(nn.Module):
@@ -248,17 +248,17 @@ class CapsNet(nn.Module):
 	def recon_loss(self, x_orig, x_hat):
 		return self.recon_loss_fn(x_hat, x_orig)
 
-	def margin_loss(self,x, labels, weights=1.):
+	def margin_loss(self,x, labels, weights=1., epsilon=1e-8):
 		batch_size = x.size(0)
 
-		v_c = torch.sqrt((x**2).sum(dim=2, keepdim=True))
+		v_c = torch.sqrt((x**2+epsilon).sum(dim=2, keepdim=True))
 
 		#print(v_c)
 
 		left = (F.relu(0.9 - v_c)**2).view(batch_size, -1)
 		right = (F.relu(v_c - 0.1)**2).view(batch_size, -1)
-		#print(left)
-		#print(right)
+		print(left)
+		print(right)
 		#print(labels)
 
 		loss = labels * left + self.lr_balance * (1.0 - labels) * right#weights*(labels * left + self.lr_balance * (1.0 - labels) * right)
@@ -270,7 +270,7 @@ class CapsNet(nn.Module):
 	def calculate_loss(self, x_orig, x_hat, y_pred, y_true, weights=1.):
 		margin_loss = self.margin_loss(y_pred, y_true, weights=weights) # .expand_as(y_true)???
 		recon_loss = self.gamma*self.recon_loss(x_orig.squeeze(1),x_hat)
-		loss = margin_loss #+ recon_loss
+		loss = margin_loss + recon_loss
 		return loss, margin_loss, recon_loss
 
 class Trainer:
