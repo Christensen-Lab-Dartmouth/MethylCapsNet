@@ -224,11 +224,11 @@ def model_capsnet_(train_methyl_array,
 
 	dataloaders=dict()
 
-	dataloaders['train']=DataLoader(datasets['train'],batch_size=16,shuffle=True,num_workers=0, pin_memory=True, drop_last=True)
-	dataloaders['val']=DataLoader(datasets['val'],batch_size=16,shuffle=False,num_workers=0, pin_memory=True, drop_last=False)
+	dataloaders['train']=DataLoader(datasets['train'],batch_size=16,shuffle=True,num_workers=8, pin_memory=True, drop_last=True)
+	dataloaders['val']=DataLoader(datasets['val'],batch_size=16,shuffle=False,num_workers=8, pin_memory=True, drop_last=False)
 	n_primary=len(final_modules)
 	if test_methyl_array and predict:
-		dataloaders['test']=DataLoader(datasets['test'],batch_size=16,shuffle=False,num_workers=0, pin_memory=True, drop_last=False)
+		dataloaders['test']=DataLoader(datasets['test'],batch_size=16,shuffle=False,num_workers=8, pin_memory=True, drop_last=False)
 		capsnet=torch.load('capsnet_model.pkl')
 
 	else:
