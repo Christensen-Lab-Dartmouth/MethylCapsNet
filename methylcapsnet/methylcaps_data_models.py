@@ -257,8 +257,8 @@ class CapsNet(nn.Module):
 
 		left = (F.relu(0.9 - v_c)**2).view(batch_size, -1)
 		right = (F.relu(v_c - 0.1)**2).view(batch_size, -1)
-		print(left)
-		print(right)
+		#print(left)
+		#print(right)
 		#print(labels)
 
 		loss = labels * left + self.lr_balance * (1.0 - labels) * right#weights*(labels * left + self.lr_balance * (1.0 - labels) * right)
