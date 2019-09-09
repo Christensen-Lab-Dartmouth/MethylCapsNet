@@ -203,7 +203,10 @@ class Decoder(nn.Module):
 		self.decoder=MLP(n_input,hidden_topology, 0., n_outputs=n_output, binary=True, relu=False)
 
 	def forward(self, x):
-		return torch.clamp(self.decoder(x),min=0.0,max=1.0)
+		x=self.decoder(x)
+		x=torch.where(torch.isnan(x), torch.zeros_like(x), x)
+		x = torch.where(torch.isinf(x), torch.zeros_like(x), x)
+		return torch.clamp(x,min=0.0,max=1.0)
 
 class CapsNet(nn.Module):
 	def __init__(self, primary_caps, caps_hidden_layers, caps_output_layer, decoder, lr_balance=0.5, gamma=0.005):
