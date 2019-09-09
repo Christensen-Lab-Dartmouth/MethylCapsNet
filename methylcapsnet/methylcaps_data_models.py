@@ -60,6 +60,7 @@ class MethylationDataset(Dataset):
 			modules=[list(methyl_arr.beta)]
 		self.modules=modules
 		self.X=methyl_arr.beta
+		print('Null val',self.X.isnull().sum().sum())
 		self.length=methyl_arr.beta.shape[0]
 		self.module_names=module_names
 		self.pheno = methyl_arr.pheno
