@@ -191,7 +191,7 @@ def model_capsnet_(train_methyl_array,
 	modulecpgs=list(set(finalcpgs))
 	module_names=capsule_names
 
-	print(final_modules,modulecpgs,module_names)
+	print(len(final_modules),len(modulecpgs),len(module_names))
 
 	del capsules,finalcpgs,capsule_names
 
