@@ -330,6 +330,7 @@ class Trainer:
 		self.capsnet.train(True)
 		running_loss=0.
 		Y={'true':[],'pred':[]}
+		n_batch=(len(dataloader.dataset.y_orig)//dataloader.batch_size)
 		for i,batch in enumerate(dataloader):
 			x_orig=batch[0]
 			#print(x_orig)
@@ -352,6 +353,7 @@ class Trainer:
 			Y['true'].extend(y_true.argmax(1).detach().cpu().numpy().flatten().astype(int).tolist())
 			Y['pred'].extend(F.softmax(torch.sqrt((y_pred**2).sum(2))).argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
 			train_loss=margin_loss.item()#print(loss)
+			print('Epoch {} [{}/{}]: Train Loss {}'.format(self.epoch,i,n_batch,train_loss))
 			running_loss+=train_loss
 
 		#y_true,y_pred=Y['true'],Y['pred']
@@ -365,6 +367,7 @@ class Trainer:
 	def val_test_loop(self, dataloader):
 		self.capsnet.train(False)
 		running_loss=np.zeros((3,)).astype(float)
+		n_batch=int(np.ceil(len(dataloader.dataset.y_orig)/dataloader.batch_size))
 		Y={'true':[],'pred':[],'embedding_primarycaps_aligned':[],'embedding_primarycaps':[],'embedding_primarycaps_cat':[],'embedding_outputcaps':[],'routing_weights':[]}
 		with torch.no_grad():
 			for i,batch in enumerate(dataloader):
@@ -381,6 +384,7 @@ class Trainer:
 				loss,margin_loss,recon_loss=self.capsnet.calculate_loss(x_orig, x_hat, y_pred, y_true, weights=self.weights)
 				#loss=loss+self.gamma2*self.compute_custom_loss(y_pred, y_true, y_true_orig)
 				val_loss=margin_loss.item()#print(loss)
+				print('Epoch {} [{}/{}]: Val Loss {}'.format(self.epoch,i,n_batch,val_loss))
 				running_loss=running_loss+np.array([loss.item(),margin_loss,recon_loss.item()])
 
 				routing_coefs=self.capsnet.caps_output_layer.return_routing_coef().detach().cpu().numpy()
