@@ -26,7 +26,7 @@ np.random.seed(RANDOM_SEED)
 torch.manual_seed(RANDOM_SEED)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
-#torch.multiprocessing.set_sharing_strategy('file_system')
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 class BCEWithNan(object):
 	def __init__ (self, loss_function=nn.BCEWithLogitsLoss(reduce=False)):
