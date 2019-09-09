@@ -21,5 +21,6 @@ setup(name='methylcapsnet',
       install_requires=['methylnet',
                         'chocolate',
                         'pybedtools',
-                        'plotly-express'],
+                        'plotly-express',
+                        'pysnooper'],
       package_data={'methylcapsnet': ['data/*']})

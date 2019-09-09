@@ -200,10 +200,10 @@ class CapsLayer(nn.Module):
 class Decoder(nn.Module):
 	def __init__(self, n_input, n_output, hidden_topology):
 		super(Decoder, self).__init__()
-		self.decoder=MLP(n_input,hidden_topology, 0., n_outputs=n_output, binary=False, relu=False)
+		self.decoder=MLP(n_input,hidden_topology, 0., n_outputs=n_output, binary=True, relu=False)
 
 	def forward(self, x):
-		return self.decoder(x)
+		return torch.clamp(self.decoder(x),min=0.0,max=1.0)
 
 class CapsNet(nn.Module):
 	def __init__(self, primary_caps, caps_hidden_layers, caps_output_layer, decoder, lr_balance=0.5, gamma=0.005):
@@ -212,7 +212,7 @@ class CapsNet(nn.Module):
 		self.caps_hidden_layers=caps_hidden_layers
 		self.caps_output_layer=caps_output_layer
 		self.decoder=decoder
-		self.recon_loss_fn = BCEWithNan()#nn.BCEWithLogitsLoss() # WithLogits https://github.com/shllln/BCEWithNan
+		self.recon_loss_fn = nn.BCELoss()#BCEWithNan()#nn.BCEWithLogitsLoss() # WithLogits https://github.com/shllln/BCEWithNan
 		self.lr_balance=lr_balance
 		self.gamma=gamma
 
