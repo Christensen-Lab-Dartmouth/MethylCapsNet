@@ -92,7 +92,7 @@ def return_val_loss(command, torque, total_time, delay_time, job, gpu, additiona
 
 	return val_loss
 
-@pysnooper.snoop('hypjob.log')
+#@pysnooper.snoop('hypjob.log')
 def hyperparameter_job_(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -114,7 +114,8 @@ def hyperparameter_job_(train_methyl_array,
 						capsule_choice,
 						custom_capsule_file,
 						retrain_top_job,
-						batch_size):
+						batch_size,
+						output_top_job_params):
 
 	additional_params=dict(train_methyl_array=train_methyl_array,
 							val_methyl_array=val_methyl_array,
@@ -129,6 +130,9 @@ def hyperparameter_job_(train_methyl_array,
 
 	if custom_capsule_file:
 		additional_params['custom_capsule_file']=custom_capsule_file
+
+	if output_top_job_params:
+		retrain_top_job=True
 
 	if update:
 		additional_params['capsule_choice']=capsule_choice
@@ -159,13 +163,18 @@ def hyperparameter_job_(train_methyl_array,
 
 		print(params)
 
+		command='{} methylcaps-model model_capsnet {} || methylcaps-model report_loss -j {}'.format('CUDA_VISIBLE_DEVICES=0' if gpu and not torque else '',' '.join(['--{} {}'.format(k,v) for k,v in params.items() if v]),params['job'])#,'&' if not torque else '')
+
+		if output_top_job_params and retrain_top_job:
+			print('Top params command: ')
+			print('{} --predict'.format(command.split('||')[0]))
+			exit()
+
 		if update:
 
 			val_loss = model_capsnet_(**params)
 
 		else:
-
-			command='{} methylcaps-model model_capsnet {} || methylcaps-model report_loss -j {}'.format('CUDA_VISIBLE_DEVICES=0' if gpu and not torque else '',' '.join(['--{} {}'.format(k,v) for k,v in params.items() if v]),params['job'])#,'&' if not torque else '')
 
 			val_loss = return_val_loss(command, torque, total_time, delay_time, job, gpu, additional_command, additional_options)
 
@@ -280,6 +289,7 @@ def hyperparameter_job_(train_methyl_array,
 @click.option('-cf', '--custom_capsule_file', default='', help='Custom capsule file, bed or pickle.', show_default=True, type=click.Path(exists=False))
 @click.option('-rt', '--retrain_top_job', is_flag=True,  help='Retrain top job.', show_default=True, type=click.Path(exists=False))
 @click.option('-bs', '--batch_size', default=16, help='Batch size.', show_default=True)
+@click.option('-op', '--output_top_job_params', is_flag=True,  help='Output parameters of top job.', show_default=True, type=click.Path(exists=False))
 def hyperparameter_job(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -301,7 +311,8 @@ def hyperparameter_job(train_methyl_array,
 						capsule_choice,
 						custom_capsule_file,
 						retrain_top_job,
-						batch_size):
+						batch_size,
+						output_top_job_params):
 
 	hyperparameter_job_(train_methyl_array,
 							val_methyl_array,
@@ -324,7 +335,8 @@ def hyperparameter_job(train_methyl_array,
 							capsule_choice,
 							custom_capsule_file,
 							retrain_top_job,
-							batch_size)
+							batch_size,
+							output_top_job_params)
 
 
 

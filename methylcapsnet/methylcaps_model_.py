@@ -74,7 +74,7 @@ def get_binned_modules(ma=None,a=annotations450,b='lola_vignette_data/activeDHS_
 		c=b.intersect(a,wa=True,wb=True).sort()
 		# c.saveas('c.bed')
 		d=c.groupby(g=[1,2,3,4],c=(8,8),o=('count','distinct'))
-	d.saveas('d.bed')
+	#d.saveas('d.bed')
 	df2=d.to_dataframe()
 	df3=df2.loc[df2.iloc[:,-2]>min_capsule_len]
 	modules = [cpgs.split(',') for cpgs in df3.iloc[:,-1].values]
@@ -231,7 +231,6 @@ def model_capsnet_(train_methyl_array,
 	if test_methyl_array and predict:
 		dataloaders['test']=DataLoader(datasets['test'],batch_size=batch_size,shuffle=False,num_workers=8, pin_memory=True, drop_last=False)
 		capsnet=torch.load('capsnet_model.pkl')
-
 	else:
 		n_inputs=list(map(len,final_modules))
 
@@ -274,7 +273,7 @@ def model_capsnet_(train_methyl_array,
 	else:
 		if test_methyl_array:
 			Y=trainer.predict(dataloaders['test'])
-			pickle.dump(Y,'predictions.pkl')
+			pickle.dump(Y,open('predictions.pkl','wb'))
 			val_loss=-1
 	#print(val_loss)
 	# print([min(trainer.val_losses),n_epochs,

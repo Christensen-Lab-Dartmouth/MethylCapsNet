@@ -370,7 +370,7 @@ class Trainer:
 		self.scheduler.step()
 		return running_loss
 
-	@pysnooper.snoop('val_loop.log')
+	#@pysnooper.snoop('val_loop.log')
 	def val_test_loop(self, dataloader):
 		self.capsnet.train(False)
 		running_loss=np.zeros((3,)).astype(float)
@@ -413,11 +413,11 @@ class Trainer:
 			Y['true']=np.array(Y['true']).astype(str)
 			print('Epoch {}: Val Loss {}, Margin Loss {}, Recon Loss {}, Val R2: {}, Val MAE: {}'.format(self.epoch,running_loss[0],running_loss[1],running_loss[2],r2_score(Y['true'].astype(float),Y['pred'].astype(float)), mean_absolute_error(Y['true'].astype(float),Y['pred'].astype(float))))
 			print(classification_report(Y['true'],Y['pred']))
-			self.make_plots(Y, dataloader)
+			self.make_plots(copy.deepcopy(Y), dataloader)
 			self.save_routing_weights(Y)
 		return running_loss, Y
 
-	@pysnooper.snoop('plots.log')
+	#@pysnooper.snoop('plots.log')
 	def make_plots(self, Y, dataloader):
 		for k in ['embedding_primarycaps','embedding_primarycaps_aligned']:
 			Y[k]=pd.DataFrame(PCA(n_components=2).fit_transform(np.vstack(Y[k])),columns=['x','y'])
