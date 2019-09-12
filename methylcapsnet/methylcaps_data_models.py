@@ -171,7 +171,7 @@ class CapsLayer(nn.Module):
 			self.c_ij = softmax(b_ij)
 			#print(c_ij)
 			c_ij = torch.cat([self.c_ij] * batch_size, dim=0).unsqueeze(4)
-			#print('coeff',c_ij.size())#[0,:,0,:])#.size())
+			print('coeff',c_ij.size())#[0,:,0,:])#.size())
 
 			s_j = (c_ij * u_hat).sum(dim=1, keepdim=True)
 			v_j = self.squash(s_j)
