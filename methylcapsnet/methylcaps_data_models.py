@@ -408,7 +408,9 @@ class Trainer:
 				Y['pred'].extend((y_pred**2).sum(2).argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
 			running_loss/=(i+1)
 			#Y['routing_weights'].iloc[:,:]=Y['routing_weights'].values/(i+1)
-			Y['routing_weights']=xr.DataArray(np.concatenate(Y['routing_weights'],axis=0),coords={'sample':dataloader.dataset.sample_names,'primary_capsules':dataloader.dataset.module_names,'output_capsules':dataloader.dataset.binarizer.classes_},
+			rw=np.concatenate(Y['routing_weights'],axis=0)
+			print(rw.shape)
+			Y['routing_weights']=xr.DataArray(rw,coords={'sample':dataloader.dataset.sample_names,'primary_capsules':dataloader.dataset.module_names,'output_capsules':dataloader.dataset.binarizer.classes_},
 												dims={'sample':len(dataloader.dataset.sample_names),'primary_capsules':len(dataloader.dataset.module_names),'output_capsules':len(dataloader.dataset.binarizer.classes_)})
 			Y['embedding_primarycaps_aligned']=np.concatenate(Y['embedding_primarycaps_aligned'],axis=0)
 			Y['pred']=np.array(Y['pred']).astype(str)
@@ -417,6 +419,7 @@ class Trainer:
 			print(classification_report(Y['true'],Y['pred']))
 			Y_plot=copy.deepcopy(Y)
 			Y_plot['embedding_primarycaps_aligned']=np.concatenate([Y_plot['embedding_primarycaps_aligned'][i] for i in range(Y_plot['embedding_primarycaps_aligned'].shape[0])],axis=0)
+			print(Y_plot['embedding_primarycaps_aligned'])
 			self.make_plots(Y_plot, dataloader)
 			self.save_routing_weights(Y)
 			Y['embedding_primarycaps_aligned']=xr.DataArray(Y['embedding_primarycaps_aligned'],coords={'sample':dataloader.dataset.sample_names,'primary_capsules':dataloader.dataset.module_names,'z_primary':np.arange(Y['embedding_primarycaps_aligned'].shape[2])},
