@@ -408,9 +408,9 @@ class Trainer:
 				Y['pred'].extend((y_pred**2).sum(2).argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
 			running_loss/=(i+1)
 			#Y['routing_weights'].iloc[:,:]=Y['routing_weights'].values/(i+1)
-			Y['routing_weights']=xr.DataArray(np.stack(Y['routing_weights'],axis=0),coords={'sample':dataloader.dataset.sample_names,'primary_capsules':dataloader.dataset.module_names,'output_capsules':dataloader.dataset.binarizer.classes_},
+			Y['routing_weights']=xr.DataArray(np.concatenate(Y['routing_weights'],axis=0),coords={'sample':dataloader.dataset.sample_names,'primary_capsules':dataloader.dataset.module_names,'output_capsules':dataloader.dataset.binarizer.classes_},
 												dims={'sample':len(dataloader.dataset.sample_names),'primary_capsules':len(dataloader.dataset.module_names),'output_capsules':len(dataloader.dataset.binarizer.classes_)})
-			Y['embedding_primarycaps_aligned']=np.stack(Y['embedding_primarycaps_aligned'],axis=0)
+			Y['embedding_primarycaps_aligned']=np.concatenate(Y['embedding_primarycaps_aligned'],axis=0)
 			Y['pred']=np.array(Y['pred']).astype(str)
 			Y['true']=np.array(Y['true']).astype(str)
 			print('Epoch {}: Val Loss {}, Margin Loss {}, Recon Loss {}, Val R2: {}, Val MAE: {}'.format(self.epoch,running_loss[0],running_loss[1],running_loss[2],r2_score(Y['true'].astype(float),Y['pred'].astype(float)), mean_absolute_error(Y['true'].astype(float),Y['pred'].astype(float))))
