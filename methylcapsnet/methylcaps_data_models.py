@@ -396,7 +396,10 @@ class Trainer:
 				print('Epoch {} [{}/{}]: Val Loss {}'.format(self.epoch,i,n_batch,val_loss))
 				running_loss=running_loss+np.array([loss.item(),margin_loss,recon_loss.item()])
 
-				routing_coefs=self.capsnet.caps_output_layer.return_routing_coef().detach().cpu().numpy()[...,0,0]
+				routing_coefs=self.capsnet.caps_output_layer.return_routing_coef().detach().cpu().numpy()
+				print(routing_coefs.shape)
+				routing_coefs=routing_coefs[...,0,0]
+				print(routing_coefs.shape)
 				Y['routing_weights'].append(routing_coefs)#pd.DataFrame(routing_coefs.T,index=dataloader.dataset.binarizer.classes_,columns=dataloader.dataset.module_names)
 				Y['embedding_primarycaps'].append(torch.cat([primary_caps_out[i] for i in range(x_orig.size(0))],dim=0).detach().cpu().numpy())
 				primary_caps_out=primary_caps_out.view(primary_caps_out.size(0),primary_caps_out.size(1)*primary_caps_out.size(2))
