@@ -419,7 +419,7 @@ class Trainer:
 			Y_plot['embedding_primarycaps_aligned']=np.concatenate([Y_plot['embedding_primarycaps_aligned'][i] for i in range(Y_plot['embedding_primarycaps_aligned'].shape[0])],axis=0)
 			self.make_plots(Y_plot, dataloader)
 			self.save_routing_weights(Y)
-			Y['embedding_primarycaps_aligned']=xr.DataArray(Y['embedding_primarycaps_aligned'],coords={'sample':dataloader.dataset.sample_names,'primary_capsules':dataloader.dataset.module_names,'z_primary':np.arange(Y['embedding_primarycaps_aligned'].shape[2]},
+			Y['embedding_primarycaps_aligned']=xr.DataArray(Y['embedding_primarycaps_aligned'],coords={'sample':dataloader.dataset.sample_names,'primary_capsules':dataloader.dataset.module_names,'z_primary':np.arange(Y['embedding_primarycaps_aligned'].shape[2])},
 													dims={'sample':len(dataloader.dataset.sample_names),'primary_capsules':len(dataloader.dataset.module_names),'z_primary':Y['embedding_primarycaps_aligned'].shape[2]})
 		return running_loss, Y
 
