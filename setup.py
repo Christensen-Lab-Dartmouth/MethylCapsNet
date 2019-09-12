@@ -22,5 +22,6 @@ setup(name='methylcapsnet',
                         'chocolate',
                         'pybedtools',
                         'plotly-express',
-                        'pysnooper'],
+                        'pysnooper',
+                        'xarray'],
       package_data={'methylcapsnet': ['data/*']})

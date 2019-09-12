@@ -18,6 +18,7 @@ import pysnooper
 from torch.autograd import Variable, detect_anomaly
 from functools import reduce
 from torch.nn import BatchNorm1d
+import xarray as xr
 #from sksurv.linear_model.coxph import BreslowEstimator
 from sklearn.utils.class_weight import compute_class_weight
 from apex import amp
@@ -64,6 +65,7 @@ class MethylationDataset(Dataset):
 		self.length=methyl_arr.beta.shape[0]
 		self.module_names=module_names
 		self.pheno = methyl_arr.pheno
+		self.sample_names=self.pheno.index.values
 
 	def __len__(self):
 		return self.length
@@ -171,7 +173,7 @@ class CapsLayer(nn.Module):
 			self.c_ij = softmax(b_ij)
 			#print(c_ij)
 			c_ij = torch.cat([self.c_ij] * batch_size, dim=0).unsqueeze(4)
-			print('coeff',c_ij.size())#[0,:,0,:])#.size())
+			#print('coeff',c_ij.size())#[0,:,0,:])#.size())
 
 			s_j = (c_ij * u_hat).sum(dim=1, keepdim=True)
 			v_j = self.squash(s_j)
@@ -394,27 +396,29 @@ class Trainer:
 				print('Epoch {} [{}/{}]: Val Loss {}'.format(self.epoch,i,n_batch,val_loss))
 				running_loss=running_loss+np.array([loss.item(),margin_loss,recon_loss.item()])
 
-				routing_coefs=self.capsnet.caps_output_layer.return_routing_coef().detach().cpu().numpy()
-				if not i:
-					Y['routing_weights']=pd.DataFrame(routing_coefs[0,...,0].T,index=dataloader.dataset.binarizer.classes_,columns=dataloader.dataset.module_names)
-				else:
-					Y['routing_weights']+=pd.DataFrame(routing_coefs[0,...,0].T,index=dataloader.dataset.binarizer.classes_,columns=dataloader.dataset.module_names)
+				routing_coefs=self.capsnet.caps_output_layer.return_routing_coef().detach().cpu().numpy()[...,0,0]
+				Y['routing_weights'].append(routing_coefs)#pd.DataFrame(routing_coefs.T,index=dataloader.dataset.binarizer.classes_,columns=dataloader.dataset.module_names)
 				Y['embedding_primarycaps'].append(torch.cat([primary_caps_out[i] for i in range(x_orig.size(0))],dim=0).detach().cpu().numpy())
 				primary_caps_out=primary_caps_out.view(primary_caps_out.size(0),primary_caps_out.size(1)*primary_caps_out.size(2))
 				Y['embedding_outputcaps'].append(embedding.detach().cpu().numpy())
 				Y['embedding_primarycaps_cat'].append(primary_caps_out.detach().cpu().numpy())
 				primary_caps_aligned=self.capsnet.caps_output_layer.return_embedding_previous_layer()
-				Y['embedding_primarycaps_aligned'].append(torch.cat([primary_caps_aligned[i] for i in range(x_orig.size(0))],dim=0).detach().cpu().numpy())
+				Y['embedding_primarycaps_aligned'].append(primary_caps_aligned.detach().cpu().numpy()) # torch.cat([primary_caps_aligned[i] for i in range(x_orig.size(0))],dim=0)
 				Y['true'].extend(y_true.argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
 				Y['pred'].extend((y_pred**2).sum(2).argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
 			running_loss/=(i+1)
-			Y['routing_weights'].iloc[:,:]=Y['routing_weights'].values/(i+1)
+			#Y['routing_weights'].iloc[:,:]=Y['routing_weights'].values/(i+1)
+			Y['routing_weights']=xr.DataArray(np.stack(Y['routing_weights'],axis=0),coords={'sample':dataloader.dataset.sample_names,'primary_capsules':dataloader.dataset.module_names,'output_capsules':dataloader.dataset.binarizer.classes_})
+			Y['embedding_primarycaps_aligned']=np.stack(Y['embedding_primarycaps_aligned'],axis=0)
 			Y['pred']=np.array(Y['pred']).astype(str)
 			Y['true']=np.array(Y['true']).astype(str)
 			print('Epoch {}: Val Loss {}, Margin Loss {}, Recon Loss {}, Val R2: {}, Val MAE: {}'.format(self.epoch,running_loss[0],running_loss[1],running_loss[2],r2_score(Y['true'].astype(float),Y['pred'].astype(float)), mean_absolute_error(Y['true'].astype(float),Y['pred'].astype(float))))
 			print(classification_report(Y['true'],Y['pred']))
-			self.make_plots(copy.deepcopy(Y), dataloader)
+			Y_plot=copy.deepcopy(Y)
+			Y_plot['embedding_primarycaps_aligned']=np.concatenate([Y_plot['embedding_primarycaps_aligned'][i] for i in range(Y_plot['embedding_primarycaps_aligned'].shape[0])],axis=0)
+			self.make_plots(Y_plot, dataloader)
 			self.save_routing_weights(Y)
+			Y['embedding_primarycaps_aligned']=xr.DataArray(Y['embedding_primarycaps_aligned'],coords={'sample':dataloader.dataset.sample_names,'primary_capsules':dataloader.dataset.module_names,'z_primary':np.arange(Y['embedding_primarycaps_aligned'].shape[2])})
 		return running_loss, Y
 
 	#@pysnooper.snoop('plots.log')
