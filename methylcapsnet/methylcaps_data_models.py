@@ -173,8 +173,8 @@ class CapsLayer(nn.Module):
 			self.c_ij = F.softmax(b_ij,dim=2).unsqueeze(4)
 			#print(c_ij)
 			#c_ij = torch.cat([self.c_ij] * batch_size, dim=0).unsqueeze(4)
-			print('coeff',self.c_ij.size())#[0,:,0,:])#.size())
-			print(u_hat.size())
+			# print('coeff',self.c_ij.size())#[0,:,0,:])#.size())
+			# print(u_hat.size())
 
 			s_j = (self.c_ij * u_hat).sum(dim=1, keepdim=True)
 			v_j = self.squash(s_j)
@@ -399,7 +399,7 @@ class Trainer:
 
 				routing_coefs=self.capsnet.caps_output_layer.return_routing_coef().detach().cpu().numpy()
 				print(routing_coefs.shape)
-				routing_coefs=routing_coefs[0,...,0]
+				routing_coefs=routing_coefs[...,0,0]
 				print(routing_coefs.shape)
 				Y['routing_weights'].append(routing_coefs)#pd.DataFrame(routing_coefs.T,index=dataloader.dataset.binarizer.classes_,columns=dataloader.dataset.module_names)
 				Y['embedding_primarycaps'].append(torch.cat([primary_caps_out[i] for i in range(x_orig.size(0))],dim=0).detach().cpu().numpy())
