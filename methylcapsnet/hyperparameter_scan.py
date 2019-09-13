@@ -162,7 +162,7 @@ def hyperparameter_scan(train_methyl_array,
 	if optimize_time:
 		opts['optimize_time']=''
 	if capsule_choice:
-		opts['capsule_choice']=' -cc '.join(list(capsule_choice))
+		opts['capsule_choice']=' -cc '.join(list(filter(None,capsule_choice)))
 	if retrain_top_job:
 		n_jobs=1
 		opts['retrain_top_job']=''
