@@ -190,7 +190,7 @@ class CapsLayer(nn.Module):
 		return self.c_ij
 
 	def return_embedding_previous_layer(self):
-		primary_aligned=self.u_hat.mean(dim=2)
+		primary_aligned=self.u_hat#.mean(dim=2)
 		return primary_aligned
 
 	#@staticmethod
@@ -407,7 +407,7 @@ class Trainer:
 				Y['embedding_outputcaps'].append(embedding.detach().cpu().numpy())
 				Y['embedding_primarycaps_cat'].append(primary_caps_out.detach().cpu().numpy())
 				primary_caps_aligned=self.capsnet.caps_output_layer.return_embedding_previous_layer()
-				Y['embedding_primarycaps_aligned'].append(primary_caps_aligned.detach().cpu().numpy()) # torch.cat([primary_caps_aligned[i] for i in range(x_orig.size(0))],dim=0)
+				Y['embedding_primarycaps_aligned'].append(primary_caps_aligned[...,0,:].detach().cpu().numpy()) # torch.cat([primary_caps_aligned[i] for i in range(x_orig.size(0))],dim=0)
 				Y['true'].extend(y_true.argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
 				Y['pred'].extend((y_pred**2).sum(2).argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
 			running_loss/=(i+1)
@@ -422,12 +422,12 @@ class Trainer:
 			print('Epoch {}: Val Loss {}, Margin Loss {}, Recon Loss {}, Val R2: {}, Val MAE: {}'.format(self.epoch,running_loss[0],running_loss[1],running_loss[2],r2_score(Y['true'].astype(float),Y['pred'].astype(float)), mean_absolute_error(Y['true'].astype(float),Y['pred'].astype(float))))
 			print(classification_report(Y['true'],Y['pred']))
 			Y_plot=copy.deepcopy(Y)
-			Y_plot['embedding_primarycaps_aligned']=np.concatenate([Y_plot['embedding_primarycaps_aligned'][i] for i in range(Y_plot['embedding_primarycaps_aligned'].shape[0])],axis=0)
+			Y_plot['embedding_primarycaps_aligned']=np.concatenate([Y_plot['embedding_primarycaps_aligned'][i,:,0,:] for i in range(Y_plot['embedding_primarycaps_aligned'].shape[0])],axis=0)
 			#print(Y_plot['embedding_primarycaps_aligned'])
 			self.make_plots(Y_plot, dataloader)
 			self.save_routing_weights(Y)
-			Y['embedding_primarycaps_aligned']=xr.DataArray(Y['embedding_primarycaps_aligned'],coords={'sample':dataloader.dataset.sample_names,'primary_capsules':dataloader.dataset.module_names,'z_primary':np.arange(Y['embedding_primarycaps_aligned'].shape[2])},
-													dims={'sample':len(dataloader.dataset.sample_names),'primary_capsules':len(dataloader.dataset.module_names),'z_primary':Y['embedding_primarycaps_aligned'].shape[2]})
+			Y['embedding_primarycaps_aligned']=xr.DataArray(Y['embedding_primarycaps_aligned'],coords={'sample':dataloader.dataset.sample_names,'primary_capsules':dataloader.dataset.module_names,'output_capsules':dataloader.dataset.binarizer.classes_,'z_primary':np.arange(Y['embedding_primarycaps_aligned'].shape[2])},
+													dims={'sample':len(dataloader.dataset.sample_names),'primary_capsules':len(dataloader.dataset.module_names),'output_capsules':len(dataloader.dataset.binarizer.classes_),'z_primary':Y['embedding_primarycaps_aligned'].shape[2]})
 		return running_loss, Y
 
 	#@pysnooper.snoop('plots.log')
