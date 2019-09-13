@@ -398,9 +398,9 @@ class Trainer:
 				running_loss=running_loss+np.array([loss.item(),margin_loss,recon_loss.item()])
 
 				routing_coefs=self.capsnet.caps_output_layer.return_routing_coef().detach().cpu().numpy()
-				print(routing_coefs.shape)
+				#print(routing_coefs.shape)
 				routing_coefs=routing_coefs[...,0,0]
-				print(routing_coefs.shape)
+				#print(routing_coefs.shape)
 				Y['routing_weights'].append(routing_coefs)#pd.DataFrame(routing_coefs.T,index=dataloader.dataset.binarizer.classes_,columns=dataloader.dataset.module_names)
 				Y['embedding_primarycaps'].append(torch.cat([primary_caps_out[i] for i in range(x_orig.size(0))],dim=0).detach().cpu().numpy())
 				primary_caps_out=primary_caps_out.view(primary_caps_out.size(0),primary_caps_out.size(1)*primary_caps_out.size(2))
@@ -413,7 +413,7 @@ class Trainer:
 			running_loss/=(i+1)
 			#Y['routing_weights'].iloc[:,:]=Y['routing_weights'].values/(i+1)
 			rw=np.concatenate(Y['routing_weights'],axis=0)
-			print(rw.shape)
+			#print(rw.shape)
 			Y['routing_weights']=xr.DataArray(rw,coords={'sample':dataloader.dataset.sample_names,'primary_capsules':dataloader.dataset.module_names,'output_capsules':dataloader.dataset.binarizer.classes_},
 												dims={'sample':len(dataloader.dataset.sample_names),'primary_capsules':len(dataloader.dataset.module_names),'output_capsules':len(dataloader.dataset.binarizer.classes_)})
 			Y['embedding_primarycaps_aligned']=np.concatenate(Y['embedding_primarycaps_aligned'],axis=0)
@@ -423,7 +423,7 @@ class Trainer:
 			print(classification_report(Y['true'],Y['pred']))
 			Y_plot=copy.deepcopy(Y)
 			Y_plot['embedding_primarycaps_aligned']=np.concatenate([Y_plot['embedding_primarycaps_aligned'][i] for i in range(Y_plot['embedding_primarycaps_aligned'].shape[0])],axis=0)
-			print(Y_plot['embedding_primarycaps_aligned'])
+			#print(Y_plot['embedding_primarycaps_aligned'])
 			self.make_plots(Y_plot, dataloader)
 			self.save_routing_weights(Y)
 			Y['embedding_primarycaps_aligned']=xr.DataArray(Y['embedding_primarycaps_aligned'],coords={'sample':dataloader.dataset.sample_names,'primary_capsules':dataloader.dataset.module_names,'z_primary':np.arange(Y['embedding_primarycaps_aligned'].shape[2])},
