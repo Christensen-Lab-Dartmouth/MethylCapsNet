@@ -427,8 +427,8 @@ class Trainer:
 			#print(Y_plot['embedding_primarycaps_aligned'])
 			self.make_plots(Y_plot, dataloader)
 			self.save_routing_weights(Y)
-			Y['embedding_primarycaps_aligned']=xr.DataArray(Y['embedding_primarycaps_aligned'],coords={'sample':dataloader.dataset.sample_names,'primary_capsules':dataloader.dataset.module_names,'output_capsules':dataloader.dataset.binarizer.classes_,'z_primary':np.arange(Y['embedding_primarycaps_aligned'].shape[2])},
-													dims={'sample':len(dataloader.dataset.sample_names),'primary_capsules':len(dataloader.dataset.module_names),'output_capsules':len(dataloader.dataset.binarizer.classes_),'z_primary':Y['embedding_primarycaps_aligned'].shape[2]})
+			Y['embedding_primarycaps_aligned']=xr.DataArray(Y['embedding_primarycaps_aligned'],coords={'sample':dataloader.dataset.sample_names,'primary_capsules':dataloader.dataset.module_names,'output_capsules':dataloader.dataset.binarizer.classes_,'z_primary':np.arange(Y['embedding_primarycaps_aligned'].shape[3])},
+													dims={'sample':len(dataloader.dataset.sample_names),'primary_capsules':len(dataloader.dataset.module_names),'output_capsules':len(dataloader.dataset.binarizer.classes_),'z_primary':Y['embedding_primarycaps_aligned'].shape[3]})
 		return running_loss, Y
 
 	#@pysnooper.snoop('plots.log')
