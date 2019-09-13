@@ -173,6 +173,8 @@ def hyperparameter_job_(train_methyl_array,
 			print('Top params command: ')
 			print('{} --predict'.format(command.split('||')[0]))
 			exit()
+		elif output_top_job_params:
+			print('Continuing training of random parameters, please specify retrain_top_job.')
 
 		if update:
 
@@ -293,7 +295,7 @@ def hyperparameter_job_(train_methyl_array,
 @click.option('-cf', '--custom_capsule_file', default='', help='Custom capsule file, bed or pickle.', show_default=True, type=click.Path(exists=False))
 @click.option('-rt', '--retrain_top_job', is_flag=True,  help='Retrain top job.', show_default=True)
 @click.option('-bs', '--batch_size', default=16, help='Batch size.', show_default=True)
-@click.option('-op', '--output_top_job_params', is_flag=True,  help='Output parameters of top job.', show_default=True, type=click.Path(exists=False))
+@click.option('-op', '--output_top_job_params', is_flag=True,  help='Output parameters of top job.', show_default=True)
 def hyperparameter_job(train_methyl_array,
 						val_methyl_array,
 						interest_col,
