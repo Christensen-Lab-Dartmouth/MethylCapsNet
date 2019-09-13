@@ -273,6 +273,7 @@ def model_capsnet_(train_methyl_array,
 			pd.DataFrame([job,val_loss],index=['job','val_loss'],columns=[0]).T.to_sql('val_loss',conn,if_exists='append')
 	else:
 		if test_methyl_array:
+			trainer.weights=1.
 			Y=trainer.predict(dataloaders['test'])
 			pickle.dump(Y,open('predictions.pkl','wb'))
 			val_loss=-1
