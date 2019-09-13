@@ -417,6 +417,7 @@ class Trainer:
 			Y['routing_weights']=xr.DataArray(rw,coords={'sample':dataloader.dataset.sample_names,'primary_capsules':dataloader.dataset.module_names,'output_capsules':dataloader.dataset.binarizer.classes_},
 												dims={'sample':len(dataloader.dataset.sample_names),'primary_capsules':len(dataloader.dataset.module_names),'output_capsules':len(dataloader.dataset.binarizer.classes_)})
 			Y['embedding_primarycaps_aligned']=np.concatenate(Y['embedding_primarycaps_aligned'],axis=0)
+			print(Y['embedding_primarycaps_aligned'].shape)
 			Y['pred']=np.array(Y['pred']).astype(str)
 			Y['true']=np.array(Y['true']).astype(str)
 			print('Epoch {}: Val Loss {}, Margin Loss {}, Recon Loss {}, Val R2: {}, Val MAE: {}'.format(self.epoch,running_loss[0],running_loss[1],running_loss[2],r2_score(Y['true'].astype(float),Y['pred'].astype(float)), mean_absolute_error(Y['true'].astype(float),Y['pred'].astype(float))))
