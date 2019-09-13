@@ -164,7 +164,7 @@ class CapsLayer(nn.Module):
 		self.u_hat=u_hat.squeeze(4)
 		#print('affine_trans',u_hat.size())
 
-		b_ij = Variable(torch.zeros(1, self.num_routes, self.n_capsules, 1))
+		b_ij = Variable(torch.zeros(batch_size, self.num_routes, self.n_capsules, 1))
 
 		if torch.cuda.is_available():
 			b_ij=b_ij.cuda()
@@ -172,16 +172,16 @@ class CapsLayer(nn.Module):
 		for iteration in range(self.routing_iterations):
 			self.c_ij = softmax(b_ij)
 			#print(c_ij)
-			c_ij = torch.cat([self.c_ij] * batch_size, dim=0).unsqueeze(4)
-			#print('coeff',c_ij.size())#[0,:,0,:])#.size())
+			#c_ij = torch.cat([self.c_ij] * batch_size, dim=0).unsqueeze(4)
+			print('coeff',self.c_ij.size())#[0,:,0,:])#.size())
 
-			s_j = (c_ij * u_hat).sum(dim=1, keepdim=True)
+			s_j = (self.c_ij * u_hat).sum(dim=1, keepdim=True)
 			v_j = self.squash(s_j)
 			#print('z',v_j.size())
 
 			if iteration < self.routing_iterations - 1:
 				a_ij = torch.matmul(u_hat.transpose(3, 4), torch.cat([v_j] * self.num_routes, dim=1))
-				b_ij = b_ij + a_ij.squeeze(4).mean(dim=0, keepdim=True)
+				b_ij = b_ij + a_ij.squeeze(4)#.mean(dim=0, keepdim=True)
 
 		return v_j.squeeze(1)
 
@@ -398,7 +398,7 @@ class Trainer:
 
 				routing_coefs=self.capsnet.caps_output_layer.return_routing_coef().detach().cpu().numpy()
 				print(routing_coefs.shape)
-				routing_coefs=routing_coefs[...,0,0]
+				routing_coefs=routing_coefs[0,...,0]
 				print(routing_coefs.shape)
 				Y['routing_weights'].append(routing_coefs)#pd.DataFrame(routing_coefs.T,index=dataloader.dataset.binarizer.classes_,columns=dataloader.dataset.module_names)
 				Y['embedding_primarycaps'].append(torch.cat([primary_caps_out[i] for i in range(x_orig.size(0))],dim=0).detach().cpu().numpy())
