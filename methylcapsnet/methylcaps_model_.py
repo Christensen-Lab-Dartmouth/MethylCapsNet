@@ -242,7 +242,8 @@ def model_capsnet_(train_methyl_array,
 	decoder = Decoder(n_out_caps*caps_out_len,len(list(ma.beta)),decoder_topology)
 	capsnet = CapsNet(primary_caps, hidden_caps, output_caps, decoder, gamma=gamma)
 
-	capsnet.load_state_dict(torch.load('capsnet_model.pkl'))
+	if test_methyl_array and predict:
+		capsnet.load_state_dict(torch.load('capsnet_model.pkl'))
 
 	if torch.cuda.is_available():
 		capsnet=capsnet.cuda()
