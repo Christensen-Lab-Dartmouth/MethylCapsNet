@@ -56,7 +56,7 @@ def methylcaps():
 @click.option('-cc', '--capsule_choice', default=['genomic_binned'], multiple=True, help='Specify multiple sets of capsules to include. Cannot specify both custom_bed and custom_set.', show_default=True, type=click.Choice(['genomic_binned','custom_bed','custom_set','UCSC_RefGene_Accession', 'UCSC_RefGene_Group', 'UCSC_CpG_Islands_Name', 'Relation_to_UCSC_CpG_Island', 'Phantom', 'DMR', 'Enhancer', 'HMM_Island', 'Regulatory_Feature_Name', 'Regulatory_Feature_Group', 'DHS']))# ADD LOLA!!!
 @click.option('-cf', '--custom_capsule_file', default='', help='Custom capsule file, bed or pickle.', show_default=True, type=click.Path(exists=False))
 @click.option('-t', '--test_methyl_array', default='./train_val_test_sets/test_methyl_array.pkl', help='Test database for beta and phenotype data.', type=click.Path(exists=False), show_default=True)
-@click.option('-pr', '--predict', is_flag=True, help='Predict on MethlyCapsNet.', type=click.Path(exists=False), show_default=True)
+@click.option('-pr', '--predict', is_flag=True, help='Predict on MethlyCapsNet.', show_default=True)
 @click.option('-bs', '--batch_size', default=16, help='Batch size.', show_default=True)
 def model_capsnet(train_methyl_array,
 					val_methyl_array,
