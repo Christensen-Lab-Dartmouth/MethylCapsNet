@@ -134,10 +134,10 @@ def hyperparameter_job_(train_methyl_array,
 	if output_top_job_params:
 		retrain_top_job=True
 
-	if update:
+	if update and not (retrain_top_job and output_top_job_params):
 		additional_params['capsule_choice']=capsule_choice
 	else:
-		additional_params['capsule_choice']=' -cc '.join(list(capsule_choice))
+		additional_params['capsule_choice']=opts['capsule_choice']=' -cc '.join(list(filter(None,capsule_choice)))
 
 	if not survival:
 		additional_params['gamma2']=1e-2
