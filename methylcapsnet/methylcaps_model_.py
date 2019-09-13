@@ -230,18 +230,19 @@ def model_capsnet_(train_methyl_array,
 	n_primary=len(final_modules)
 	if test_methyl_array and predict:
 		dataloaders['test']=DataLoader(datasets['test'],batch_size=batch_size,shuffle=False,num_workers=8, pin_memory=True, drop_last=False)
-		capsnet=torch.load('capsnet_model.pkl')
-	else:
-		n_inputs=list(map(len,final_modules))
+
+	n_inputs=list(map(len,final_modules))
 
 
-		primary_caps = PrimaryCaps(modules=final_modules,hidden_topology=hidden_topology,n_output=primary_caps_out_len)
-		hidden_caps = []
-		n_out_caps=len(datasets['train'].y_unique)
+	primary_caps = PrimaryCaps(modules=final_modules,hidden_topology=hidden_topology,n_output=primary_caps_out_len)
+	hidden_caps = []
+	n_out_caps=len(datasets['train'].y_unique)
 
-		output_caps = CapsLayer(n_out_caps,n_primary,primary_caps_out_len,caps_out_len,routing_iterations=routing_iterations)
-		decoder = Decoder(n_out_caps*caps_out_len,len(list(ma.beta)),decoder_topology)
-		capsnet = CapsNet(primary_caps, hidden_caps, output_caps, decoder, gamma=gamma)
+	output_caps = CapsLayer(n_out_caps,n_primary,primary_caps_out_len,caps_out_len,routing_iterations=routing_iterations)
+	decoder = Decoder(n_out_caps*caps_out_len,len(list(ma.beta)),decoder_topology)
+	capsnet = CapsNet(primary_caps, hidden_caps, output_caps, decoder, gamma=gamma)
+
+	capsnet.load_state_dict(torch.load('capsnet_model.pkl'))
 
 	if torch.cuda.is_available():
 		capsnet=capsnet.cuda()
@@ -262,7 +263,7 @@ def model_capsnet_(train_methyl_array,
 			#assert 1==2
 			trainer.fit(dataloader=dataloaders['train'])
 			val_loss=min(trainer.val_losses)
-			torch.save(trainer.capsnet,'capsnet_model.pkl')
+			torch.save(trainer.capsnet.state_dict(),'capsnet_model.pkl')
 		except Exception as e:
 			print(e)
 			val_loss=-2

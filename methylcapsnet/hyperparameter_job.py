@@ -154,6 +154,8 @@ def hyperparameter_job_(train_methyl_array,
 		# for k in list(params.keys()):
 		# 	if k.endswith('_size'):
 		# 		del params[k]
+		print(params['nehl'],params['ndhl'])
+		print(del_params)
 		for param in del_params:
 			del params[param]
 
