@@ -162,7 +162,7 @@ class CapsLayer(nn.Module):
 		#print('affine',W.size(),x.size())
 		u_hat = torch.matmul(W, x)
 		self.u_hat=u_hat.squeeze(4)
-		print('affine_trans',self.u_hat.size())
+		#print('affine_trans',self.u_hat.size())
 
 		b_ij = Variable(torch.zeros(batch_size, self.num_routes, self.n_capsules, 1))
 
@@ -190,7 +190,7 @@ class CapsLayer(nn.Module):
 		return self.c_ij
 
 	def return_embedding_previous_layer(self):
-		primary_aligned=self.u_hat[...,0]
+		primary_aligned=self.u_hat.mean(dim=2)
 		return primary_aligned
 
 	#@staticmethod
