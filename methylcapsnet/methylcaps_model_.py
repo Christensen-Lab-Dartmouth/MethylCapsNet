@@ -262,11 +262,10 @@ def model_capsnet_(train_methyl_array,
 			#assert 1==2
 			trainer.fit(dataloader=dataloaders['train'])
 			val_loss=min(trainer.val_losses)
+			torch.save(trainer.capsnet,'capsnet_model.pkl')
 		except Exception as e:
 			print(e)
 			val_loss=-2
-
-		torch.save(trainer.capsnet,'capsnet_model.pkl')
 
 		with sqlite3.connect('jobs.db', check_same_thread=False) as conn:
 			pd.DataFrame([job,val_loss],index=['job','val_loss'],columns=[0]).T.to_sql('val_loss',conn,if_exists='append')
