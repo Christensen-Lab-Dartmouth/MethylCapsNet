@@ -407,7 +407,7 @@ class Trainer:
 				Y['embedding_outputcaps'].append(embedding.detach().cpu().numpy())
 				Y['embedding_primarycaps_cat'].append(primary_caps_out.detach().cpu().numpy())
 				primary_caps_aligned=self.capsnet.caps_output_layer.return_embedding_previous_layer()
-				Y['embedding_primarycaps_aligned'].append(primary_caps_aligned[...,0,:].detach().cpu().numpy()) # torch.cat([primary_caps_aligned[i] for i in range(x_orig.size(0))],dim=0)
+				Y['embedding_primarycaps_aligned'].append(primary_caps_aligned.detach().cpu().numpy()) # [...,0,:] torch.cat([primary_caps_aligned[i] for i in range(x_orig.size(0))],dim=0)
 				Y['true'].extend(y_true.argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
 				Y['pred'].extend((y_pred**2).sum(2).argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
 			running_loss/=(i+1)
