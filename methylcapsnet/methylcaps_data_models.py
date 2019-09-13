@@ -170,10 +170,11 @@ class CapsLayer(nn.Module):
 			b_ij=b_ij.cuda()
 
 		for iteration in range(self.routing_iterations):
-			self.c_ij = F.softmax(b_ij,dim=2)
+			self.c_ij = F.softmax(b_ij.transpose(2,1),dim=1)
 			#print(c_ij)
 			#c_ij = torch.cat([self.c_ij] * batch_size, dim=0).unsqueeze(4)
 			print('coeff',self.c_ij.size())#[0,:,0,:])#.size())
+			print(u_hat.size())
 
 			s_j = (self.c_ij * u_hat).sum(dim=1, keepdim=True)
 			v_j = self.squash(s_j)
