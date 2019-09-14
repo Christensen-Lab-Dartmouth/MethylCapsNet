@@ -124,7 +124,8 @@ def model_capsnet_(train_methyl_array,
 					custom_capsule_file='',
 					test_methyl_array='',
 					predict=False,
-					batch_size=16):
+					batch_size=16,
+					limited_capsule_names_file=''):
 
 	capsule_choice=list(capsule_choice)
 	#custom_capsule_file=list(custom_capsule_file)
@@ -194,6 +195,20 @@ def model_capsnet_(train_methyl_array,
 	final_modules=capsules
 	modulecpgs=list(set(finalcpgs))
 	module_names=capsule_names
+
+	if limited_capsule_names_file:
+		with open(limited_capsule_names_file) as f:
+			limited_capsule_names=f.read().replace('\n',' ').split()
+		capsules=[]
+		capsule_names=[]
+		for i in range(len()):
+			if module_names[i] in limited_capsule_names:
+				capsule_names.append(module_names[i])
+				capsules.append(final_modules[i])
+
+		modulecpgs=list(reduce(lambda x,y: x+y,capsules))
+		final_modules=capsules
+		module_names=capsule_names
 
 	print(len(final_modules),len(modulecpgs),len(module_names),ma.beta.isnull().sum().sum())
 

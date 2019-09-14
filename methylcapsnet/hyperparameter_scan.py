@@ -118,6 +118,7 @@ def return_val_loss(command, torque, total_time, delay_time, job, gpu, additiona
 @click.option('-rt', '--retrain_top_job', is_flag=True,  help='Custom capsule file, bed or pickle.', show_default=True)
 @click.option('-bs', '--batch_size', default=16, help='Batch size.', show_default=True)
 @click.option('-op', '--output_top_job_params', is_flag=True,  help='Output parameters of top job.', show_default=True)
+@click.option('-lc', '--limited_capsule_names_file', default='', help='File of new line delimited names of capsules to filter from larger list.', show_default=True, type=click.Path(exists=False))
 def hyperparameter_scan(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -139,7 +140,8 @@ def hyperparameter_scan(train_methyl_array,
 						custom_capsule_file,
 						retrain_top_job,
 						batch_size,
-						output_top_job_params):
+						output_top_job_params,
+						limited_capsule_names_file):
 
 	np.random.seed(random_seed)
 
@@ -163,6 +165,8 @@ def hyperparameter_scan(train_methyl_array,
 		opts['optimize_time']=''
 	if capsule_choice:
 		opts['capsule_choice']=' -cc '.join(list(filter(None,capsule_choice)))
+	if limited_capsule_names_file:
+		opts['limited_capsule_names_file']=limited_capsule_names_file
 	if retrain_top_job:
 		n_jobs=1
 		opts['retrain_top_job']=''

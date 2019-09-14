@@ -115,7 +115,8 @@ def hyperparameter_job_(train_methyl_array,
 						custom_capsule_file,
 						retrain_top_job,
 						batch_size,
-						output_top_job_params):
+						output_top_job_params,
+						limited_capsule_names_file):
 
 	additional_params=dict(train_methyl_array=train_methyl_array,
 							val_methyl_array=val_methyl_array,
@@ -133,6 +134,9 @@ def hyperparameter_job_(train_methyl_array,
 
 	if output_top_job_params:
 		retrain_top_job=True
+
+	if limited_capsule_names_file:
+		additional_params['limited_capsule_names_file']=limited_capsule_names_file
 
 	if update and not (retrain_top_job and output_top_job_params):
 		additional_params['capsule_choice']=capsule_choice
@@ -296,6 +300,7 @@ def hyperparameter_job_(train_methyl_array,
 @click.option('-rt', '--retrain_top_job', is_flag=True,  help='Retrain top job.', show_default=True)
 @click.option('-bs', '--batch_size', default=16, help='Batch size.', show_default=True)
 @click.option('-op', '--output_top_job_params', is_flag=True,  help='Output parameters of top job.', show_default=True)
+@click.option('-lc', '--limited_capsule_names_file', default='', help='File of new line delimited names of capsules to filter from larger list.', show_default=True, type=click.Path(exists=False))
 def hyperparameter_job(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -318,7 +323,8 @@ def hyperparameter_job(train_methyl_array,
 						custom_capsule_file,
 						retrain_top_job,
 						batch_size,
-						output_top_job_params):
+						output_top_job_params,
+						limited_capsule_names_file):
 
 	hyperparameter_job_(train_methyl_array,
 							val_methyl_array,
@@ -342,7 +348,8 @@ def hyperparameter_job(train_methyl_array,
 							custom_capsule_file,
 							retrain_top_job,
 							batch_size,
-							output_top_job_params)
+							output_top_job_params,
+							limited_capsule_names_file)
 
 
 

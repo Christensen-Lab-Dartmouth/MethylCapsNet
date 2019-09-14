@@ -58,6 +58,7 @@ def methylcaps():
 @click.option('-t', '--test_methyl_array', default='./train_val_test_sets/test_methyl_array.pkl', help='Test database for beta and phenotype data.', type=click.Path(exists=False), show_default=True)
 @click.option('-pr', '--predict', is_flag=True, help='Predict on MethlyCapsNet.', show_default=True)
 @click.option('-bs', '--batch_size', default=16, help='Batch size.', show_default=True)
+@click.option('-lc', '--limited_capsule_names_file', default='', help='File of new line delimited names of capsules to filter from larger list.', show_default=True, type=click.Path(exists=False))
 def model_capsnet(train_methyl_array,
 					val_methyl_array,
 					interest_col,
@@ -80,7 +81,8 @@ def model_capsnet(train_methyl_array,
 					custom_capsule_file,
 					test_methyl_array,
 					predict,
-					batch_size):
+					batch_size,
+					limited_capsule_names_file):
 
 	model_capsnet_(train_methyl_array,
 						val_methyl_array,
@@ -104,7 +106,8 @@ def model_capsnet(train_methyl_array,
 						custom_capsule_file,
 						test_methyl_array,
 						predict,
-						batch_size)
+						batch_size,
+						limited_capsule_names_file)
 
 
 @methylcaps.command()
