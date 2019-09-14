@@ -185,7 +185,7 @@ def model_capsnet_(train_methyl_array,
 		finalcpgs.extend(modulecpgs)
 		capsule_names.extend(module_names)
 
-	selected_sets=np.intersect1d(['UCSC_RefGene_Accession', 'UCSC_RefGene_Group', 'UCSC_CpG_Islands_Name', 'Relation_to_UCSC_CpG_Island', 'Phantom', 'DMR', 'Enhancer', 'HMM_Island', 'Regulatory_Feature_Name', 'Regulatory_Feature_Group', 'DHS'],capsule_choice).tolist()
+	selected_sets=np.intersect1d(['UCSC_RefGene_Name','UCSC_RefGene_Accession', 'UCSC_RefGene_Group', 'UCSC_CpG_Islands_Name', 'Relation_to_UCSC_CpG_Island', 'Phantom', 'DMR', 'Enhancer', 'HMM_Island', 'Regulatory_Feature_Name', 'Regulatory_Feature_Group', 'DHS'],capsule_choice).tolist()
 	if selected_sets:
 		final_modules,modulecpgs,module_names=return_custom_capsules(ma=ma,capsule_file=selected_caps_file, capsule_sets=selected_sets, min_capsule_len=min_capsule_len, include_last=include_last)
 		capsules.extend(final_modules)
