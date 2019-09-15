@@ -86,15 +86,24 @@ def get_binned_modules(ma=None,a=annotations450,b='lola_vignette_data/activeDHS_
 	return final_modules,modulecpgs.tolist(),module_names
 
 @pysnooper.snoop('get_caps.log')
-def return_custom_capsules(ma=None,capsule_file=selected_caps_file, capsule_sets=['all'], min_capsule_len=2000, include_last=False):
+def return_custom_capsules(ma=None,capsule_file=selected_caps_file, capsule_sets=['all'], min_capsule_len=2000, include_last=False, limited_capsule_names_file=''):
 	allcpgs=ma.beta.columns.values
+	if limited_capsule_names_file:
+		with open(limited_capsule_names_file) as f:
+			limited_capsule_names=f.read().replace('\n',' ').split()
+	else:
+		limited_capsule_names=[]
 	caps_dict=pickle.load(open(capsule_file,'rb'))
 	capsules={}
 	if 'all' in capsule_sets:
 		capsule_sets=list(caps_dict.keys())
 	for caps_set in capsule_sets:
 		for capsule in caps_dict[caps_set]:
-			capsules[capsule]=np.intersect1d(caps_dict[caps_set][capsule],allcpgs).tolist()
+			if limited_capsule_names_file:
+				if capsule in limited_capsule_names:
+					capsules[capsule]=np.intersect1d(caps_dict[caps_set][capsule],allcpgs).tolist()
+			else:
+				capsules[capsule]=np.intersect1d(caps_dict[caps_set][capsule],allcpgs).tolist()
 	capsules={capsule:capsules[capsule] for capsule in capsules if len(capsules[capsule])>=min_capsule_len}
 	modules = [capsules[capsule] for capsule in capsules]
 	modulecpgs=np.array(list(set(list(reduce(lambda x,y:x+y,modules)))))
@@ -188,7 +197,7 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 
 	selected_sets=np.intersect1d(['UCSC_RefGene_Name','UCSC_RefGene_Accession', 'UCSC_RefGene_Group', 'UCSC_CpG_Islands_Name', 'Relation_to_UCSC_CpG_Island', 'Phantom', 'DMR', 'Enhancer', 'HMM_Island', 'Regulatory_Feature_Name', 'Regulatory_Feature_Group', 'DHS'],capsule_choice).tolist()
 	if selected_sets:
-		final_modules,modulecpgs,module_names=return_custom_capsules(ma=ma,capsule_file=selected_caps_file, capsule_sets=selected_sets, min_capsule_len=min_capsule_len, include_last=include_last)
+		final_modules,modulecpgs,module_names=return_custom_capsules(ma=ma,capsule_file=selected_caps_file, capsule_sets=selected_sets, min_capsule_len=min_capsule_len, include_last=include_last, limited_capsule_names_file=limited_capsule_names_file)
 		capsules.extend(final_modules)
 		finalcpgs.extend(modulecpgs)
 		capsule_names.extend(module_names)
@@ -197,7 +206,7 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 	modulecpgs=list(set(finalcpgs))
 	module_names=capsule_names
 
-	if limited_capsule_names_file:
+	if limited_capsule_names_file and not selected_sets:
 		with open(limited_capsule_names_file) as f:
 			limited_capsule_names=f.read().replace('\n',' ').split()
 		capsules=[]
