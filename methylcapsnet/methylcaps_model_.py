@@ -103,7 +103,7 @@ def return_custom_capsules(ma=None,capsule_file=selected_caps_file, capsule_sets
 			capsule_list=np.intersect1d(list(caps_dict[caps_set].keys()),limited_capsule_names).tolist()
 		else:
 			capsule_list=list(list(caps_dict[caps_set].keys()))
-		for capsule in caps_dict[caps_set]:
+		for capsule in capsule_list:
 			capsules[capsule]=np.intersect1d(caps_dict[caps_set][capsule],allcpgs).tolist()
 	capsules={capsule:capsules[capsule] for capsule in capsules if capsules[capsule] and len(capsules[capsule])>=min_capsule_len}
 	modules = [capsules[capsule] for capsule in capsules]
