@@ -85,6 +85,7 @@ def get_binned_modules(ma=None,a=annotations450,b='lola_vignette_data/activeDHS_
 	module_names=(df3.iloc[:,0]+'_'+df3.iloc[:,1].astype(str)+'_'+df3.iloc[:,2].astype(str)).tolist()
 	return final_modules,modulecpgs.tolist(),module_names
 
+@pysnooper.snoop('get_caps.log')
 def return_custom_capsules(ma=None,capsule_file=selected_caps_file, capsule_sets=['all'], min_capsule_len=2000, include_last=False):
 	allcpgs=ma.beta.columns.values
 	caps_dict=pickle.load(open(capsule_file,'rb'))
@@ -101,7 +102,7 @@ def return_custom_capsules(ma=None,capsule_file=selected_caps_file, capsule_sets
 	return modules,modulecpgs,module_names
 
 
-#@pysnooper.snoop('train.log')
+@pysnooper.snoop('train.log')
 def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pkl',
 					val_methyl_array='train_val_test_sets/val_methyl_array.pkl',
 					interest_col='disease',
@@ -206,7 +207,7 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 				capsule_names.append(module_names[i])
 				capsules.append(final_modules[i])
 
-		modulecpgs=list(reduce(lambda x,y: x+y,capsules))
+		modulecpgs=list(set(list(reduce(lambda x,y: x+y,capsules))))
 		final_modules=capsules
 		module_names=capsule_names
 
