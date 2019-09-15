@@ -198,7 +198,7 @@ def hyperparameter_job_(train_methyl_array,
 
 	grid=dict(n_epochs=choco.quantized_uniform(low=10, high=50, step=10),
 				bin_len=choco.quantized_uniform(low=500000, high=1000000, step=100000),
-				min_capsule_len=choco.quantized_uniform(low=200, high=500, step=50),
+				min_capsule_len=choco.quantized_uniform(low=50, high=500, step=25),
 				primary_caps_out_len=choco.quantized_uniform(low=10, high=50, step=5),
 				caps_out_len=choco.quantized_uniform(low=10, high=50, step=5),
 				nehl={i: {'el{}s'.format(j):choco.quantized_uniform(10,300,10) for j in range(i+1)} for i in range(3)},
