@@ -97,14 +97,15 @@ def return_custom_capsules(ma=None,capsule_file=selected_caps_file, capsule_sets
 	capsules={}
 	if 'all' in capsule_sets:
 		capsule_sets=list(caps_dict.keys())
+
 	for caps_set in capsule_sets:
+		if limited_capsule_names_file:
+			capsule_list=np.intersect1d(list(caps_dict[caps_set].keys()),limited_capsule_names).tolist()
+		else:
+			capsule_list=list(list(caps_dict[caps_set].keys()))
 		for capsule in caps_dict[caps_set]:
-			if limited_capsule_names_file:
-				if capsule in limited_capsule_names:
-					capsules[capsule]=np.intersect1d(caps_dict[caps_set][capsule],allcpgs).tolist()
-			else:
-				capsules[capsule]=np.intersect1d(caps_dict[caps_set][capsule],allcpgs).tolist()
-	capsules={capsule:capsules[capsule] for capsule in capsules if len(capsules[capsule])>=min_capsule_len}
+			capsules[capsule]=np.intersect1d(caps_dict[caps_set][capsule],allcpgs).tolist()
+	capsules={capsule:capsules[capsule] for capsule in capsules if capsules[capsule] and len(capsules[capsule])>=min_capsule_len}
 	modules = [capsules[capsule] for capsule in capsules]
 	modulecpgs=np.array(list(set(list(reduce(lambda x,y:x+y,modules)))))
 	module_names=list(capsules.keys())#(df3.iloc[:,0]+'_'+df3.iloc[:,1].astype(str)+'_'+df3.iloc[:,2].astype(str)).tolist()
