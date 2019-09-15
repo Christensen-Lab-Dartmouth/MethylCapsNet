@@ -116,7 +116,8 @@ def hyperparameter_job_(train_methyl_array,
 						retrain_top_job,
 						batch_size,
 						output_top_job_params,
-						limited_capsule_names_file):
+						limited_capsule_names_file,
+						min_capsule_len_low_bound):
 
 	additional_params=dict(train_methyl_array=train_methyl_array,
 							val_methyl_array=val_methyl_array,
@@ -198,9 +199,9 @@ def hyperparameter_job_(train_methyl_array,
 
 	grid=dict(n_epochs=choco.quantized_uniform(low=10, high=50, step=10),
 				bin_len=choco.quantized_uniform(low=500000, high=1000000, step=100000),
-				min_capsule_len=choco.quantized_uniform(low=50, high=500, step=25),
-				primary_caps_out_len=choco.quantized_uniform(low=10, high=50, step=5),
-				caps_out_len=choco.quantized_uniform(low=10, high=50, step=5),
+				min_capsule_len=choco.quantized_uniform(low=min_capsule_len_low_bound, high=500, step=25),
+				primary_caps_out_len=choco.quantized_uniform(low=10, high=100, step=5),
+				caps_out_len=choco.quantized_uniform(low=10, high=100, step=5),
 				nehl={i: {'el{}s'.format(j):choco.quantized_uniform(10,300,10) for j in range(i+1)} for i in range(3)},
 				#hidden_topology=,
 				gamma=choco.quantized_log(-5,-1,1,10),
@@ -301,6 +302,7 @@ def hyperparameter_job_(train_methyl_array,
 @click.option('-bs', '--batch_size', default=16, help='Batch size.', show_default=True)
 @click.option('-op', '--output_top_job_params', is_flag=True,  help='Output parameters of top job.', show_default=True)
 @click.option('-lc', '--limited_capsule_names_file', default='', help='File of new line delimited names of capsules to filter from larger list.', show_default=True, type=click.Path(exists=False))
+@click.option('-mcl', '--min_capsule_len_low_bound', default=50, help='Low bound of min number in capsules.', show_default=True)
 def hyperparameter_job(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -324,7 +326,8 @@ def hyperparameter_job(train_methyl_array,
 						retrain_top_job,
 						batch_size,
 						output_top_job_params,
-						limited_capsule_names_file):
+						limited_capsule_names_file,
+						min_capsule_len_low_bound):
 
 	hyperparameter_job_(train_methyl_array,
 							val_methyl_array,
@@ -349,7 +352,8 @@ def hyperparameter_job(train_methyl_array,
 							retrain_top_job,
 							batch_size,
 							output_top_job_params,
-							limited_capsule_names_file)
+							limited_capsule_names_file,
+							min_capsule_len_low_bound)
 
 
 

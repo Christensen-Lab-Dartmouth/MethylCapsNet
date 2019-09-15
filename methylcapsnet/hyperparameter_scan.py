@@ -120,6 +120,7 @@ def return_val_loss(command, torque, total_time, delay_time, job, gpu, additiona
 @click.option('-op', '--output_top_job_params', is_flag=True,  help='Output parameters of top job.', show_default=True)
 @click.option('-lc', '--limited_capsule_names_file', default='', help='File of new line delimited names of capsules to filter from larger list.', show_default=True, type=click.Path(exists=False))
 @click.option('-ne', '--n_epochs', default=10, help='Number of epochs. Setting to 0 induces scan of epochs.')
+@click.option('-mcl', '--min_capsule_len_low_bound', default=50, help='Low bound of min number in capsules.', show_default=True)
 def hyperparameter_scan(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -143,7 +144,8 @@ def hyperparameter_scan(train_methyl_array,
 						batch_size,
 						output_top_job_params,
 						limited_capsule_names_file,
-						n_epochs):
+						n_epochs,
+						min_capsule_len_low_bound):
 
 	np.random.seed(random_seed)
 
@@ -159,7 +161,8 @@ def hyperparameter_scan(train_methyl_array,
 							delay_time=delay_time,
 							random_state=random_seed,
 							batch_size=batch_size,
-							n_epochs=n_epochs)
+							n_epochs=n_epochs,
+							min_capsule_len_low_bound=min_capsule_len_low_bound)
 	if torque and not update:
 		opts['torque']=''
 	if gpu:
