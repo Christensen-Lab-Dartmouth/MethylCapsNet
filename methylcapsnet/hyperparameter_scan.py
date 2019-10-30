@@ -121,6 +121,10 @@ def return_val_loss(command, torque, total_time, delay_time, job, gpu, additiona
 @click.option('-lc', '--limited_capsule_names_file', default='', help='File of new line delimited names of capsules to filter from larger list.', show_default=True, type=click.Path(exists=False))
 @click.option('-ne', '--n_epochs', default=10, help='Number of epochs. Setting to 0 induces scan of epochs.')
 @click.option('-mcl', '--min_capsule_len_low_bound', default=50, help='Low bound of min number in capsules.', show_default=True)
+@click.option('-gsea', '--gsea_superset', default='', help='GSEA supersets.', show_default=True, type=click.Choice(['','C5', 'C4', 'C6', 'C7', 'C3', 'C2', 'C1', 'H', 'C8']))
+@click.option('-ts', '--tissue', default='', help='Tissue associated with GSEA.', show_default=True, type=click.Choice(['adipose tissue','adrenal gland','appendix','bone marrow','breast','cerebral cortex','cervix, uterine','colon','duodenum','endometrium','epididymis','esophagus','fallopian tube','gallbladder','heart muscle','kidney','liver','lung','lymph node','ovary','pancreas','parathyroid gland','placenta','prostate','rectum','salivary gland','seminal vesicle','skeletal muscle','skin','small intestine','smooth muscle','spleen','stomach','testis','thyroid gland','tonsil','urinary bladder']))
+@click.option('-ns', '--number_sets', default=25, help='Number top gene sets to choose for tissue-specific gene sets.', show_default=True)
+@click.option('-st', '--use_set', is_flag=True, help='Use sets or genes within sets.', show_default=True)
 def hyperparameter_scan(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -145,7 +149,11 @@ def hyperparameter_scan(train_methyl_array,
 						output_top_job_params,
 						limited_capsule_names_file,
 						n_epochs,
-						min_capsule_len_low_bound):
+						min_capsule_len_low_bound,
+						gsea_superset,
+						tissue,
+						number_sets,
+						use_set):
 
 	np.random.seed(random_seed)
 
@@ -162,9 +170,16 @@ def hyperparameter_scan(train_methyl_array,
 							random_state=random_seed,
 							batch_size=batch_size,
 							n_epochs=n_epochs,
-							min_capsule_len_low_bound=min_capsule_len_low_bound)
+							min_capsule_len_low_bound=min_capsule_len_low_bound,
+							number_sets=number_sets)
 	if torque and not update:
 		opts['torque']=''
+	if use_set:
+		opts['use_set']=''
+	if gsea_superset:
+		opts['gsea_superset']=gsea_superset
+	if tissue:
+		opts['tissue']=tissue
 	if gpu:
 		opts['gpu']=''
 	if optimize_time:

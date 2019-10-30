@@ -117,7 +117,11 @@ def hyperparameter_job_(train_methyl_array,
 						batch_size,
 						output_top_job_params,
 						limited_capsule_names_file,
-						min_capsule_len_low_bound):
+						min_capsule_len_low_bound,
+						gsea_superset,
+						tissue,
+						number_sets,
+						use_set):
 
 	additional_params=dict(train_methyl_array=train_methyl_array,
 							val_methyl_array=val_methyl_array,
@@ -125,10 +129,17 @@ def hyperparameter_job_(train_methyl_array,
 							n_bins=n_bins,
 							custom_loss=custom_loss,
 							job=job,
-							batch_size=batch_size)
+							batch_size=batch_size,
+							number_sets=number_sets,
+							)
 
 	if n_epochs:
 		additional_params['n_epochs']=n_epochs
+
+	if gsea_superset:
+		additional_params['gsea_superset']=gsea_superset
+	if tissue:
+		additional_params['tissue']=tissue
 
 	if custom_capsule_file:
 		additional_params['custom_capsule_file']=custom_capsule_file
@@ -141,8 +152,12 @@ def hyperparameter_job_(train_methyl_array,
 
 	if update and not (retrain_top_job and output_top_job_params):
 		additional_params['capsule_choice']=capsule_choice
+		if use_set:
+			additional_params['use_set']=use_set
 	else:
 		additional_params['capsule_choice']=' -cc '.join(list(filter(None,capsule_choice)))
+		if use_set:
+			additional_params['use_set']=''
 
 	if not survival:
 		additional_params['gamma2']=1e-2
@@ -172,7 +187,7 @@ def hyperparameter_job_(train_methyl_array,
 
 		print(params)
 
-		command='{} methylcaps-model model_capsnet {} || methylcaps-model report_loss -j {}'.format('CUDA_VISIBLE_DEVICES=0' if gpu and not torque else '',' '.join(['--{} {}'.format(k,v) for k,v in params.items() if v]),params['job'])#,'&' if not torque else '')
+		command='{} methylcaps-model model_capsnet {} || methylcaps-model report_loss -j {}'.format('CUDA_VISIBLE_DEVICES=0' if gpu and not torque else '',' '.join(['--{} {}'.format(k,v) for k,v in params.items() if v or k=='use_set']),params['job'])#,'&' if not torque else '')
 
 		if output_top_job_params and retrain_top_job:
 			print('Top params command: ')
@@ -232,6 +247,7 @@ def hyperparameter_job_(train_methyl_array,
 		for k in ['bin_len','caps_out_len','min_capsule_len','ndhl','nehl','primary_caps_out_len','routing_iterations']:
 			if k in params:
 				params[k]=int(params[k])
+
 		del params['_loss']
 
 		top_loss=score_loss(params)
@@ -303,6 +319,10 @@ def hyperparameter_job_(train_methyl_array,
 @click.option('-op', '--output_top_job_params', is_flag=True,  help='Output parameters of top job.', show_default=True)
 @click.option('-lc', '--limited_capsule_names_file', default='', help='File of new line delimited names of capsules to filter from larger list.', show_default=True, type=click.Path(exists=False))
 @click.option('-mcl', '--min_capsule_len_low_bound', default=50, help='Low bound of min number in capsules.', show_default=True)
+@click.option('-gsea', '--gsea_superset', default='', help='GSEA supersets.', show_default=True, type=click.Choice(['','C5', 'C4', 'C6', 'C7', 'C3', 'C2', 'C1', 'H', 'C8']))
+@click.option('-ts', '--tissue', default='', help='Tissue associated with GSEA.', show_default=True, type=click.Choice(['adipose tissue','adrenal gland','appendix','bone marrow','breast','cerebral cortex','cervix, uterine','colon','duodenum','endometrium','epididymis','esophagus','fallopian tube','gallbladder','heart muscle','kidney','liver','lung','lymph node','ovary','pancreas','parathyroid gland','placenta','prostate','rectum','salivary gland','seminal vesicle','skeletal muscle','skin','small intestine','smooth muscle','spleen','stomach','testis','thyroid gland','tonsil','urinary bladder']))
+@click.option('-ns', '--number_sets', default=25, help='Number top gene sets to choose for tissue-specific gene sets.', show_default=True)
+@click.option('-st', '--use_set', is_flag=True, help='Use sets or genes within sets.', show_default=True)
 def hyperparameter_job(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -327,7 +347,11 @@ def hyperparameter_job(train_methyl_array,
 						batch_size,
 						output_top_job_params,
 						limited_capsule_names_file,
-						min_capsule_len_low_bound):
+						min_capsule_len_low_bound,
+						gsea_superset,
+						tissue,
+						number_sets,
+						use_set):
 
 	hyperparameter_job_(train_methyl_array,
 							val_methyl_array,
@@ -353,7 +377,11 @@ def hyperparameter_job(train_methyl_array,
 							batch_size,
 							output_top_job_params,
 							limited_capsule_names_file,
-							min_capsule_len_low_bound)
+							min_capsule_len_low_bound,
+							gsea_superset,
+							tissue,
+							number_sets,
+							use_set)
 
 
 
