@@ -136,7 +136,11 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 					test_methyl_array='',
 					predict=False,
 					batch_size=16,
-					limited_capsule_names_file=''):
+					limited_capsule_names_file='',
+					gsea_superset='',
+					tissue='',
+					number_sets=25,
+					use_set=False):
 
 	capsule_choice=list(capsule_choice)
 	#custom_capsule_file=list(custom_capsule_file)

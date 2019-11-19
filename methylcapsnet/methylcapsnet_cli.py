@@ -59,6 +59,10 @@ def methylcaps():
 @click.option('-pr', '--predict', is_flag=True, help='Predict on MethlyCapsNet.', show_default=True)
 @click.option('-bs', '--batch_size', default=16, help='Batch size.', show_default=True)
 @click.option('-lc', '--limited_capsule_names_file', default='', help='File of new line delimited names of capsules to filter from larger list.', show_default=True, type=click.Path(exists=False))
+@click.option('-gsea', '--gsea_superset', default='', help='GSEA supersets.', show_default=True, type=click.Choice(['','C5', 'C4', 'C6', 'C7', 'C3', 'C2', 'C1', 'H', 'C8']))
+@click.option('-ts', '--tissue', default='', help='Tissue associated with GSEA.', show_default=True, type=click.Choice(['adipose tissue','adrenal gland','appendix','bone marrow','breast','cerebral cortex','cervix, uterine','colon','duodenum','endometrium','epididymis','esophagus','fallopian tube','gallbladder','heart muscle','kidney','liver','lung','lymph node','ovary','pancreas','parathyroid gland','placenta','prostate','rectum','salivary gland','seminal vesicle','skeletal muscle','skin','small intestine','smooth muscle','spleen','stomach','testis','thyroid gland','tonsil','urinary bladder']))
+@click.option('-ns', '--number_sets', default=25, help='Number top gene sets to choose for tissue-specific gene sets.', show_default=True)
+@click.option('-st', '--use_set', is_flag=True, help='Use sets or genes within sets.', show_default=True)
 def model_capsnet(train_methyl_array,
 					val_methyl_array,
 					interest_col,
@@ -82,7 +86,11 @@ def model_capsnet(train_methyl_array,
 					test_methyl_array,
 					predict,
 					batch_size,
-					limited_capsule_names_file):
+					limited_capsule_names_file,
+					gsea_superset,
+					tissue,
+					number_sets,
+					use_set):
 
 	model_capsnet_(train_methyl_array,
 						val_methyl_array,
@@ -107,7 +115,11 @@ def model_capsnet(train_methyl_array,
 						test_methyl_array,
 						predict,
 						batch_size,
-						limited_capsule_names_file)
+						limited_capsule_names_file,
+						gsea_superset,
+						tissue,
+						number_sets,
+						use_set)
 
 
 @methylcaps.command()
