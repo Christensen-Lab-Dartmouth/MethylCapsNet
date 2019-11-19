@@ -23,6 +23,6 @@ setup(name='methylcapsnet',
                         'pybedtools',
                         'plotly-express',
                         'pysnooper',
-                        'xarray',
+                        'xarray==0.12.3',
                         'dask'],
       package_data={'methylcapsnet': ['data/*']})
