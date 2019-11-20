@@ -122,7 +122,8 @@ def hyperparameter_job_(train_methyl_array,
 						tissue,
 						number_sets,
 						use_set,
-						gene_context):
+						gene_context,
+						select_subtypes):
 
 	additional_params=dict(train_methyl_array=train_methyl_array,
 							val_methyl_array=val_methyl_array,
@@ -153,11 +154,17 @@ def hyperparameter_job_(train_methyl_array,
 
 	if update and not (retrain_top_job and output_top_job_params):
 		additional_params['capsule_choice']=capsule_choice
+		select_subtypes=list(filter(None,select_subtypes))
+		if select_subtypes:
+			additional_params['select_subtypes']=select_subtypes
 		if use_set:
 			additional_params['use_set']=use_set
 		if gene_context:
 			additional_params['gene_context']=gene_context
 	else:
+		select_subtypes=list(filter(None,select_subtypes))
+		if select_subtypes:
+			additional_params['select_subtypes']=' -ss '.join(list(filter(None,select_subtypes)))
 		additional_params['capsule_choice']=' -cc '.join(list(filter(None,capsule_choice)))
 		if use_set:
 			additional_params['use_set']=''
@@ -329,6 +336,7 @@ def hyperparameter_job_(train_methyl_array,
 @click.option('-ns', '--number_sets', default=25, help='Number top gene sets to choose for tissue-specific gene sets.', show_default=True)
 @click.option('-st', '--use_set', is_flag=True, help='Use sets or genes within sets.', show_default=True)
 @click.option('-gc', '--gene_context', is_flag=True, help='Use upstream and gene body contexts for gsea analysis.', show_default=True)
+@click.option('-ss', '--select_subtypes', default=[''], multiple=True, help='Selected subtypes if looking to reduce number of labels to predict', show_default=True)
 def hyperparameter_job(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -358,7 +366,8 @@ def hyperparameter_job(train_methyl_array,
 						tissue,
 						number_sets,
 						use_set,
-						gene_context):
+						gene_context,
+						select_subtypes):
 
 	hyperparameter_job_(train_methyl_array,
 							val_methyl_array,
@@ -389,7 +398,8 @@ def hyperparameter_job(train_methyl_array,
 							tissue,
 							number_sets,
 							use_set,
-							gene_context)
+							gene_context,
+							select_subtypes)
 
 
 
