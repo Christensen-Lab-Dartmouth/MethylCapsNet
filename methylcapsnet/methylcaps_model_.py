@@ -21,6 +21,8 @@ import methylcapsnet
 from methylcapsnet.methylcaps_data_models import *
 import sqlite3
 import os
+import glob
+import dask
 RANDOM_SEED=42
 np.random.seed(RANDOM_SEED)
 torch.manual_seed(RANDOM_SEED)
@@ -37,9 +39,15 @@ methylcaps_dir=os.path.dirname(methylcapsnet.__file__)
 annotations450 = os.path.abspath(os.path.join(methylcaps_dir, 'data/450kannotations.bed'))
 hg19 = os.path.abspath(os.path.join(methylcaps_dir, 'data/hg19.genome'))
 selected_caps_file = os.path.abspath(os.path.join(methylcaps_dir, 'data/selected_capsules.p'))
-print_if_exists(annotations450)
-print_if_exists(hg19)
-print_if_exists(selected_caps_file)
+
+gsea_collections = os.path.abspath(os.path.join(methylcaps_dir, 'data/gsea_collections.symbols.p'))
+gene_set_weights = {os.path.basename(f).split('_')[1]: f for f in glob.glob(os.path.abspath(os.path.join(methylcaps_dir, 'data/SetTestWeights_*.txt')))}
+gene2cpg = os.path.abspath(os.path.join(methylcaps_dir, 'data/gene2cpg.p'))
+
+if 0:
+	print_if_exists(annotations450)
+	print_if_exists(hg19)
+	print_if_exists(selected_caps_file)
 
 # @pysnooper.snoop('get_mod.log')
 def get_binned_modules(ma=None,a=annotations450,b='lola_vignette_data/activeDHS_universe.bed', include_last=False, min_capsule_len=2000):
@@ -85,6 +93,13 @@ def get_binned_modules(ma=None,a=annotations450,b='lola_vignette_data/activeDHS_
 	module_names=(df3.iloc[:,0]+'_'+df3.iloc[:,1].astype(str)+'_'+df3.iloc[:,2].astype(str)).tolist()
 	return final_modules,modulecpgs.tolist(),module_names
 
+def return_caps(capsule,allcpgs,min_capsule_len):
+	capsule=np.intersect1d(capsule,all_cpgs).tolist()
+	if len(capsule)>=min_capsule_len:
+		return capsule
+	else:
+		return []
+
 @pysnooper.snoop('get_caps.log')
 def return_custom_capsules(ma=None,capsule_file=selected_caps_file, capsule_sets=['all'], min_capsule_len=2000, include_last=False, limited_capsule_names_file=''):
 	allcpgs=ma.beta.columns.values
@@ -102,15 +117,53 @@ def return_custom_capsules(ma=None,capsule_file=selected_caps_file, capsule_sets
 		if limited_capsule_names_file:
 			capsule_list=np.intersect1d(list(caps_dict[caps_set].keys()),limited_capsule_names).tolist()
 		else:
-			capsule_list=list(list(caps_dict[caps_set].keys()))
+			capsule_list=list(caps_dict[caps_set].keys())
 		for capsule in capsule_list:
-			capsules[capsule]=np.intersect1d(caps_dict[caps_set][capsule],allcpgs).tolist()
-	capsules={capsule:capsules[capsule] for capsule in capsules if capsules[capsule] and len(capsules[capsule])>=min_capsule_len}
-	modules = [capsules[capsule] for capsule in capsules]
-	modulecpgs=np.array(list(set(list(reduce(lambda x,y:x+y,modules)))))
+			capsules[capsule]=dask.delayed(lambda x:return_caps(x,all_cpgs,min_capsule_len))(caps_dict[caps_set][capsule])
+	capsules=dask.compute(capsules,scheduler='threading')[0]
+	#capsules={capsule:capsules[capsule] for capsule in capsules if capsules[capsule]}
+	modules = [capsules[capsule] for capsule in capsules if capsules[capsule]]
+	modulecpgs=reduce(np.union1d,modules)#np.array(list(set(list(reduce(lambda x,y:x+y,modules)))))
 	module_names=list(capsules.keys())#(df3.iloc[:,0]+'_'+df3.iloc[:,1].astype(str)+'_'+df3.iloc[:,2].astype(str)).tolist()
 	return modules,modulecpgs,module_names
 
+def return_gsea_capsules(ma=None,context_on=False,use_set=False,gsea_superset='H',n_top_sets=25,min_capsule_len=2000):
+	allcpgs=ma.beta.columns.values
+	entire_sets=use_set
+	collection=gsea_superset
+	gsea=pickle.load(open(gsea_collections,'rb'))
+	gene_sets=pd.read_csv(gene_set_weights[collection],sep='\t',index_col=0)[tissue].sort_values(ascending=False).index.tolist() if tissue else list(gsea[collection].keys())
+	gene2cpg=pickle.load(open(gene2cpg,'rb'))
+	if not tissue:
+		n_top_sets=0
+	if n_top_sets:
+		gene_sets=gene_sets[:n_top_sets]
+	capsules=dict()
+	context_on=entire_sets if entire_sets else context_on
+	for gene_set in gene_sets:
+		gene_set_cpgs=[]
+		for genename in gsea[collection][gene_set]:
+			gene=gene2cpg.get(genename,{'Gene':[],'Upstream':[]})
+			if context_on:
+				for k in ['Gene','Upstream']:
+					context=gene.get(k,[])
+					if context:
+						capsules['{}_{}'.format(genename,k)]=context.tolist()
+			else:
+				if not entire_sets:
+					capsules[genename]=np.union1d(gene.get('Gene',[]),gene.get('Upstream',[])).tolist()
+				else:
+					gene_set_cpgs.append(np.union1d(gene.get('Gene',[]),gene.get('Upstream',[])))
+		if entire_sets:
+			capsules[gene_set]=reduce(np.union1d,gene_set_cpgs).tolist()
+	capsules2={}
+	for capsule in capsules:
+		capsules2[capsule]=dask.delayed(lambda x:return_caps(x,all_cpgs,min_capsule_len))(capsules[capsule])
+	capsules=dask.compute(capsules,scheduler='threading')[0]
+	modules = [capsules2[capsule] for capsule in capsules if capsules2[capsule]]
+	modulecpgs=reduce(np.union1d,modules).tolist()
+	module_names=list(capsules.keys())
+	return modules,modulecpgs,module_names
 
 @pysnooper.snoop('train.log')
 def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pkl',
@@ -140,7 +193,9 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 					gsea_superset='',
 					tissue='',
 					number_sets=25,
-					use_set=False):
+					use_set=False,
+					gene_context=False,
+					select_subtypes=[]):
 
 	capsule_choice=list(capsule_choice)
 	#custom_capsule_file=list(custom_capsule_file)
@@ -163,7 +218,6 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 	if test_methyl_array and predict:
 		ma_t=MethylationArray.from_pickle(test_methyl_array)
 
-
 	try:
 		ma.remove_na_samples(interest_col)
 		ma_v.remove_na_samples(interest_col)
@@ -171,6 +225,16 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 			ma_t.remove_na_samples(interest_col)
 	except:
 		pass
+
+	if select_subtypes:
+		ma.pheno=ma.pheno.loc[ma.pheno[interest_col].isin(select_subtypes)]
+		ma.beta=ma.beta.loc[ma.pheno.index]
+		ma_v.pheno=ma_v.pheno.loc[ma_v.pheno[interest_col].isin(select_subtypes)]
+		ma_v.beta=ma_v.beta.loc[ma_v.pheno.index]
+
+		if test_methyl_array and predict:
+			ma_t.pheno=ma_t.pheno.loc[ma_t.pheno[interest_col].isin(select_subtypes)]
+			ma_t.beta=ma_t.beta.loc[ma_t.pheno.index]
 
 	capsules,finalcpgs,capsule_names=[],[],[]
 	annotation_file=annotations450
@@ -203,6 +267,12 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 	selected_sets=np.intersect1d(['UCSC_RefGene_Name','UCSC_RefGene_Accession', 'UCSC_RefGene_Group', 'UCSC_CpG_Islands_Name', 'Relation_to_UCSC_CpG_Island', 'Phantom', 'DMR', 'Enhancer', 'HMM_Island', 'Regulatory_Feature_Name', 'Regulatory_Feature_Group', 'DHS'],capsule_choice).tolist()
 	if selected_sets:
 		final_modules,modulecpgs,module_names=return_custom_capsules(ma=ma,capsule_file=selected_caps_file, capsule_sets=selected_sets, min_capsule_len=min_capsule_len, include_last=include_last, limited_capsule_names_file=limited_capsule_names_file)
+		capsules.extend(final_modules)
+		finalcpgs.extend(modulecpgs)
+		capsule_names.extend(module_names)
+
+	if gsea_superset:
+		modules,modulecpgs,module_names=return_gsea_capsules(ma=ma,context_on=False,use_set=use_set,gsea_superset=gsea_superset,n_top_sets=number_sets,min_capsule_len=min_capsule_len)
 		capsules.extend(final_modules)
 		finalcpgs.extend(modulecpgs)
 		capsule_names.extend(module_names)

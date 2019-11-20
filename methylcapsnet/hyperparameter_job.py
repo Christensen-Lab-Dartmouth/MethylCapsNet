@@ -121,7 +121,8 @@ def hyperparameter_job_(train_methyl_array,
 						gsea_superset,
 						tissue,
 						number_sets,
-						use_set):
+						use_set,
+						gene_context):
 
 	additional_params=dict(train_methyl_array=train_methyl_array,
 							val_methyl_array=val_methyl_array,
@@ -154,10 +155,14 @@ def hyperparameter_job_(train_methyl_array,
 		additional_params['capsule_choice']=capsule_choice
 		if use_set:
 			additional_params['use_set']=use_set
+		if gene_context:
+			additional_params['gene_context']=gene_context
 	else:
 		additional_params['capsule_choice']=' -cc '.join(list(filter(None,capsule_choice)))
 		if use_set:
 			additional_params['use_set']=''
+		if gene_context:
+			additional_params['gene_context']=''
 
 	if not survival:
 		additional_params['gamma2']=1e-2
@@ -319,10 +324,11 @@ def hyperparameter_job_(train_methyl_array,
 @click.option('-op', '--output_top_job_params', is_flag=True,  help='Output parameters of top job.', show_default=True)
 @click.option('-lc', '--limited_capsule_names_file', default='', help='File of new line delimited names of capsules to filter from larger list.', show_default=True, type=click.Path(exists=False))
 @click.option('-mcl', '--min_capsule_len_low_bound', default=50, help='Low bound of min number in capsules.', show_default=True)
-@click.option('-gsea', '--gsea_superset', default='', help='GSEA supersets.', show_default=True, type=click.Choice(['','C5', 'C4', 'C6', 'C7', 'C3', 'C2', 'C1', 'H', 'C8']))
+@click.option('-gsea', '--gsea_superset', default='', help='GSEA supersets.', show_default=True, type=click.Choice(['','C1', 'C3.MIR', 'C3.TFT', 'C7', 'C5.MF', 'H', 'C5.BP', 'C2.CP', 'C2.CGP', 'C4.CGN', 'C5.CC', 'C6', 'C4.CM']))
 @click.option('-ts', '--tissue', default='', help='Tissue associated with GSEA.', show_default=True, type=click.Choice(['adipose tissue','adrenal gland','appendix','bone marrow','breast','cerebral cortex','cervix, uterine','colon','duodenum','endometrium','epididymis','esophagus','fallopian tube','gallbladder','heart muscle','kidney','liver','lung','lymph node','ovary','pancreas','parathyroid gland','placenta','prostate','rectum','salivary gland','seminal vesicle','skeletal muscle','skin','small intestine','smooth muscle','spleen','stomach','testis','thyroid gland','tonsil','urinary bladder']))
 @click.option('-ns', '--number_sets', default=25, help='Number top gene sets to choose for tissue-specific gene sets.', show_default=True)
 @click.option('-st', '--use_set', is_flag=True, help='Use sets or genes within sets.', show_default=True)
+@click.option('-gc', '--gene_context', is_flag=True, help='Use upstream and gene body contexts for gsea analysis.', show_default=True)
 def hyperparameter_job(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -351,7 +357,8 @@ def hyperparameter_job(train_methyl_array,
 						gsea_superset,
 						tissue,
 						number_sets,
-						use_set):
+						use_set,
+						gene_context):
 
 	hyperparameter_job_(train_methyl_array,
 							val_methyl_array,
@@ -381,7 +388,8 @@ def hyperparameter_job(train_methyl_array,
 							gsea_superset,
 							tissue,
 							number_sets,
-							use_set)
+							use_set,
+							gene_context)
 
 
 

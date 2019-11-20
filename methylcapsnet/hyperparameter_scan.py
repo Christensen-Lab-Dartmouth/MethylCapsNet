@@ -121,10 +121,12 @@ def return_val_loss(command, torque, total_time, delay_time, job, gpu, additiona
 @click.option('-lc', '--limited_capsule_names_file', default='', help='File of new line delimited names of capsules to filter from larger list.', show_default=True, type=click.Path(exists=False))
 @click.option('-ne', '--n_epochs', default=10, help='Number of epochs. Setting to 0 induces scan of epochs.')
 @click.option('-mcl', '--min_capsule_len_low_bound', default=50, help='Low bound of min number in capsules.', show_default=True)
-@click.option('-gsea', '--gsea_superset', default='', help='GSEA supersets.', show_default=True, type=click.Choice(['','C5', 'C4', 'C6', 'C7', 'C3', 'C2', 'C1', 'H', 'C8']))
+@click.option('-gsea', '--gsea_superset', default='', help='GSEA supersets.', show_default=True, type=click.Choice(['','C1', 'C3.MIR', 'C3.TFT', 'C7', 'C5.MF', 'H', 'C5.BP', 'C2.CP', 'C2.CGP', 'C4.CGN', 'C5.CC', 'C6', 'C4.CM']))
 @click.option('-ts', '--tissue', default='', help='Tissue associated with GSEA.', show_default=True, type=click.Choice(['adipose tissue','adrenal gland','appendix','bone marrow','breast','cerebral cortex','cervix, uterine','colon','duodenum','endometrium','epididymis','esophagus','fallopian tube','gallbladder','heart muscle','kidney','liver','lung','lymph node','ovary','pancreas','parathyroid gland','placenta','prostate','rectum','salivary gland','seminal vesicle','skeletal muscle','skin','small intestine','smooth muscle','spleen','stomach','testis','thyroid gland','tonsil','urinary bladder']))
 @click.option('-ns', '--number_sets', default=25, help='Number top gene sets to choose for tissue-specific gene sets.', show_default=True)
 @click.option('-st', '--use_set', is_flag=True, help='Use sets or genes within sets.', show_default=True)
+@click.option('-gc', '--gene_context', is_flag=True, help='Use upstream and gene body contexts for gsea analysis.', show_default=True)
+@click.option('-ss', '--select_subtypes', default=[''], multiple=True, help='Selected subtypes if looking to reduce number of labels to predict', show_default=True)
 def hyperparameter_scan(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -153,7 +155,9 @@ def hyperparameter_scan(train_methyl_array,
 						gsea_superset,
 						tissue,
 						number_sets,
-						use_set):
+						use_set,
+						gene_context,
+						select_subtypes):
 
 	np.random.seed(random_seed)
 
@@ -176,6 +180,8 @@ def hyperparameter_scan(train_methyl_array,
 		opts['torque']=''
 	if use_set:
 		opts['use_set']=''
+	if gene_context:
+		opts['gene_context']=''
 	if gsea_superset:
 		opts['gsea_superset']=gsea_superset
 	if tissue:
@@ -186,6 +192,9 @@ def hyperparameter_scan(train_methyl_array,
 		opts['optimize_time']=''
 	if capsule_choice:
 		opts['capsule_choice']=' -cc '.join(list(filter(None,capsule_choice)))
+	select_subtypes=list(filter(None,capsule_choice))
+	if select_subtypes:
+		opts['select_subtypes']=' -ss '.join(select_subtypes)
 	if limited_capsule_names_file:
 		opts['limited_capsule_names_file']=limited_capsule_names_file
 	if retrain_top_job:
