@@ -164,28 +164,28 @@ def extract_capsules(pasnet_model,pasnet_config,n_capsules,feature_csv,capsule_t
 @click.option('-n', '--n_capsules', default=0, help='Number pathways to extract.', show_default=True)
 @click.option('-txt', '--capsule_txt', default='custom_capsules.txt', help='Where to extract custom capsules.', type=click.Path(exists=False), show_default=True)
 def return_pas_importances(train_methyl_array,
-                            val_methyl_array,
-                            interest_col,
-                            select_subtypes,
-                            capsules_pickle,
-                            n_bins,
-                            pas_config,
-                            model_state_dict_pkl,
-                            batch_size,
+							val_methyl_array,
+							interest_col,
+							select_subtypes,
+							capsules_pickle,
+							n_bins,
+							pas_config,
+							model_state_dict_pkl,
+							batch_size,
 							n_capsules,
 							capsule_txt):
 	from methylcapsnet.methylcaps_interpret import return_pas_importances_
 
 	importances=return_pas_importances_(train_methyl_array,
-	                            val_methyl_array,
-	                            interest_col,
-	                            list(filter(None,select_subtypes)),
-	                            capsules_pickle,
-	                            False,
-	                            n_bins,
-	                            pas_config,
-	                            model_state_dict_pkl,
-	                            batch_size)
+								val_methyl_array,
+								interest_col,
+								list(filter(None,select_subtypes)),
+								capsules_pickle,
+								False,
+								n_bins,
+								pas_config,
+								model_state_dict_pkl,
+								batch_size)
 
 	pd.DataFrame(importances).to_csv(feature_csv)
 	with open(capsule_txt,'w') as f:
