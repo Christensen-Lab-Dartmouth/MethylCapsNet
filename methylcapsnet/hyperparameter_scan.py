@@ -113,7 +113,7 @@ def return_val_loss(command, torque, total_time, delay_time, job, gpu, additiona
 @click.option('-u', '--update', is_flag=True, help='Update in script.')
 @click.option('-rs', '--random_seed', default=42, help='Random state.')
 @click.option('-ot', '--optimize_time', is_flag=True, help='Optimize model for compute time.')
-@click.option('-cc', '--capsule_choice', default=['genomic_binned'], multiple=True, help='Specify multiple sets of capsules to include. Cannot specify both custom_bed and custom_set.', show_default=True, type=click.Choice(['genomic_binned','custom_bed','custom_set','UCSC_RefGene_Name','UCSC_RefGene_Accession', 'UCSC_RefGene_Group', 'UCSC_CpG_Islands_Name', 'Relation_to_UCSC_CpG_Island', 'Phantom', 'DMR', 'Enhancer', 'HMM_Island', 'Regulatory_Feature_Name', 'Regulatory_Feature_Group', 'DHS']))
+@click.option('-cc', '--capsule_choice', default=['genomic_binned'], multiple=True, help='Specify multiple sets of capsules to include. Cannot specify both custom_bed and custom_set.', show_default=True, type=click.Choice(["GSEA",'genomic_binned','custom_bed','custom_set','UCSC_RefGene_Name','UCSC_RefGene_Accession', 'UCSC_RefGene_Group', 'UCSC_CpG_Islands_Name', 'Relation_to_UCSC_CpG_Island', 'Phantom', 'DMR', 'Enhancer', 'HMM_Island', 'Regulatory_Feature_Name', 'Regulatory_Feature_Group', 'DHS']))
 @click.option('-cf', '--custom_capsule_file', default='', help='Custom capsule file, bed or pickle.', show_default=True, type=click.Path(exists=False))
 @click.option('-rt', '--retrain_top_job', is_flag=True,  help='Custom capsule file, bed or pickle.', show_default=True)
 @click.option('-bs', '--batch_size', default=16, help='Batch size.', show_default=True)
@@ -127,6 +127,7 @@ def return_val_loss(command, torque, total_time, delay_time, job, gpu, additiona
 @click.option('-st', '--use_set', is_flag=True, help='Use sets or genes within sets.', show_default=True)
 @click.option('-gc', '--gene_context', is_flag=True, help='Use upstream and gene body contexts for gsea analysis.', show_default=True)
 @click.option('-ss', '--select_subtypes', default=[''], multiple=True, help='Selected subtypes if looking to reduce number of labels to predict', show_default=True)
+@click.option('-hyp', '--custom_hyperparameters', default='hyperparameters.yaml', help='Custom hyperparameter yaml file, bed or pickle.', show_default=True, type=click.Path(exists=False))
 def hyperparameter_scan(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -157,7 +158,8 @@ def hyperparameter_scan(train_methyl_array,
 						number_sets,
 						use_set,
 						gene_context,
-						select_subtypes):
+						select_subtypes,
+						custom_hyperparameters):
 
 	np.random.seed(random_seed)
 
@@ -175,7 +177,8 @@ def hyperparameter_scan(train_methyl_array,
 							batch_size=batch_size,
 							n_epochs=n_epochs,
 							min_capsule_len_low_bound=min_capsule_len_low_bound,
-							number_sets=number_sets)
+							number_sets=number_sets,
+							custom_hyperparameters=custom_hyperparameters)
 	if torque and not update:
 		opts['torque']=''
 	if use_set:
@@ -192,7 +195,7 @@ def hyperparameter_scan(train_methyl_array,
 		opts['optimize_time']=''
 	if capsule_choice:
 		opts['capsule_choice']=' -cc '.join(list(filter(None,capsule_choice)))
-	select_subtypes=list(filter(None,capsule_choice))
+	select_subtypes=list(filter(None,select_subtypes))
 	if select_subtypes:
 		opts['select_subtypes']=' -ss '.join(select_subtypes)
 	if limited_capsule_names_file:

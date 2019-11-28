@@ -123,7 +123,8 @@ def hyperparameter_job_(train_methyl_array,
 						number_sets,
 						use_set,
 						gene_context,
-						select_subtypes):
+						select_subtypes,
+						custom_hyperparameters):
 
 	additional_params=dict(train_methyl_array=train_methyl_array,
 							val_methyl_array=val_methyl_array,
@@ -223,21 +224,44 @@ def hyperparameter_job_(train_methyl_array,
 		else:
 			return val_loss
 
+	grid=dict(n_epochs=dict(low=10, high=50, step=10),
+				bin_len=dict(low=500000, high=1000000, step=100000),
+				min_capsule_len=dict(low=min_capsule_len_low_bound, high=500, step=25),
+				primary_caps_out_len=dict(low=10, high=100, step=5),
+				caps_out_len=dict(low=10, high=100, step=5),
+				nehl=dict(low=10,high=300,step=10,n_layers=3),
+				ndhl=dict(low=100,high=300,step=10,n_layers=3),
+				learning_rate=dict(low=-5,high=-1,step=1,base=10),
+				gamma=dict(low=-5,high=-1,step=1,base=10),
+				gamma2=dict(low=-5,high=-1,step=1,base=10),
+				overlap=dict(low=0., high=.5, step=.1),
+				routing_iterations=dict(low=2, high=4, step=1))
 
-	grid=dict(n_epochs=choco.quantized_uniform(low=10, high=50, step=10),
-				bin_len=choco.quantized_uniform(low=500000, high=1000000, step=100000),
-				min_capsule_len=choco.quantized_uniform(low=min_capsule_len_low_bound, high=500, step=25),
-				primary_caps_out_len=choco.quantized_uniform(low=10, high=100, step=5),
-				caps_out_len=choco.quantized_uniform(low=10, high=100, step=5),
-				nehl={i: {'el{}s'.format(j):choco.quantized_uniform(10,300,10) for j in range(i+1)} for i in range(3)},
-				#hidden_topology=,
-				gamma=choco.quantized_log(-5,-1,1,10),
-				ndhl={i: {'dl{}s'.format(j):choco.quantized_uniform(100,300,10) for j in range(i+1)} for i in range(3)},
-				#decoder_topology=,
-				learning_rate=choco.quantized_log(-5,-1,1,10),
-				routing_iterations=choco.quantized_uniform(low=2, high=4, step=1),
-				overlap=choco.quantized_uniform(low=0., high=.5, step=.1),
-				gamma2=choco.quantized_log(-5,-1,1,10)
+	if os.path.exists(custom_hyperparameters):
+		from ruamel.yaml import safe_load as load
+		with open(custom_hyperparameters) as f:
+			new_grid = load(f)
+		print(new_grid)
+		for k in new_grid:
+			for k2 in new_grid[k]:
+				grid[k][k2]=new_grid[k][k2]
+
+
+	n_layers=dict(encoder=grid['nehl'].pop('n_layers'),decoder=grid['ndhl'].pop('n_layers'))
+
+
+	grid=dict(n_epochs=choco.quantized_uniform(**grid['n_epochs']),
+				bin_len=choco.quantized_uniform(**grid['bin_len']),
+				min_capsule_len=choco.quantized_uniform(**grid['min_capsule_len']),
+				primary_caps_out_len=choco.quantized_uniform(**grid['primary_caps_out_len']),
+				caps_out_len=choco.quantized_uniform(**grid['caps_out_len']),
+				nehl={i: {'el{}s'.format(j):choco.quantized_uniform(**grid['nehl']) for j in range(i+1)} for i in range(n_layers['encoder'])},
+				gamma=choco.quantized_log(**grid['gamma']),
+				ndhl={i: {'dl{}s'.format(j):choco.quantized_uniform(**grid['ndhl']) for j in range(i+1)} for i in range(n_layers['decoder'])},
+				learning_rate=choco.quantized_log(**grid['learning_rate']),
+				routing_iterations=choco.quantized_uniform(**grid['routing_iterations']),
+				overlap=choco.quantized_uniform(**grid['overlap']),
+				gamma2=choco.quantized_log(**grid['gamma2'])
 			) # ADD BATCH SIZE
 
 	if n_epochs:
@@ -324,7 +348,7 @@ def hyperparameter_job_(train_methyl_array,
 @click.option('-srv', '--survival', is_flag=True, help='Scan parameters for survival analysis.')
 @click.option('-ot', '--optimize_time', is_flag=True, help='Optimize model for compute time.')
 @click.option('-rs', '--random_state', default=42, help='Random state.')
-@click.option('-cc', '--capsule_choice', default=['genomic_binned'], multiple=True, help='Specify multiple sets of capsules to include. Cannot specify both custom_bed and custom_set.', show_default=True, type=click.Choice(['genomic_binned','custom_bed','custom_set','UCSC_RefGene_Name','UCSC_RefGene_Accession', 'UCSC_RefGene_Group', 'UCSC_CpG_Islands_Name', 'Relation_to_UCSC_CpG_Island', 'Phantom', 'DMR', 'Enhancer', 'HMM_Island', 'Regulatory_Feature_Name', 'Regulatory_Feature_Group', 'DHS']))
+@click.option('-cc', '--capsule_choice', default=['genomic_binned'], multiple=True, help='Specify multiple sets of capsules to include. Cannot specify both custom_bed and custom_set.', show_default=True, type=click.Choice(["GSEA",'genomic_binned','custom_bed','custom_set','UCSC_RefGene_Name','UCSC_RefGene_Accession', 'UCSC_RefGene_Group', 'UCSC_CpG_Islands_Name', 'Relation_to_UCSC_CpG_Island', 'Phantom', 'DMR', 'Enhancer', 'HMM_Island', 'Regulatory_Feature_Name', 'Regulatory_Feature_Group', 'DHS']))
 @click.option('-cf', '--custom_capsule_file', default='', help='Custom capsule file, bed or pickle.', show_default=True, type=click.Path(exists=False))
 @click.option('-rt', '--retrain_top_job', is_flag=True,  help='Retrain top job.', show_default=True)
 @click.option('-bs', '--batch_size', default=16, help='Batch size.', show_default=True)
@@ -332,11 +356,12 @@ def hyperparameter_job_(train_methyl_array,
 @click.option('-lc', '--limited_capsule_names_file', default='', help='File of new line delimited names of capsules to filter from larger list.', show_default=True, type=click.Path(exists=False))
 @click.option('-mcl', '--min_capsule_len_low_bound', default=50, help='Low bound of min number in capsules.', show_default=True)
 @click.option('-gsea', '--gsea_superset', default='', help='GSEA supersets.', show_default=True, type=click.Choice(['','C1', 'C3.MIR', 'C3.TFT', 'C7', 'C5.MF', 'H', 'C5.BP', 'C2.CP', 'C2.CGP', 'C4.CGN', 'C5.CC', 'C6', 'C4.CM']))
-@click.option('-ts', '--tissue', default='', help='Tissue associated with GSEA.', show_default=True, type=click.Choice(['adipose tissue','adrenal gland','appendix','bone marrow','breast','cerebral cortex','cervix, uterine','colon','duodenum','endometrium','epididymis','esophagus','fallopian tube','gallbladder','heart muscle','kidney','liver','lung','lymph node','ovary','pancreas','parathyroid gland','placenta','prostate','rectum','salivary gland','seminal vesicle','skeletal muscle','skin','small intestine','smooth muscle','spleen','stomach','testis','thyroid gland','tonsil','urinary bladder']))
+@click.option('-ts', '--tissue', default='', help='Tissue associated with GSEA.', show_default=True, type=click.Choice(['','adipose tissue','adrenal gland','appendix','bone marrow','breast','cerebral cortex','cervix, uterine','colon','duodenum','endometrium','epididymis','esophagus','fallopian tube','gallbladder','heart muscle','kidney','liver','lung','lymph node','ovary','pancreas','parathyroid gland','placenta','prostate','rectum','salivary gland','seminal vesicle','skeletal muscle','skin','small intestine','smooth muscle','spleen','stomach','testis','thyroid gland','tonsil','urinary bladder']))
 @click.option('-ns', '--number_sets', default=25, help='Number top gene sets to choose for tissue-specific gene sets.', show_default=True)
 @click.option('-st', '--use_set', is_flag=True, help='Use sets or genes within sets.', show_default=True)
 @click.option('-gc', '--gene_context', is_flag=True, help='Use upstream and gene body contexts for gsea analysis.', show_default=True)
 @click.option('-ss', '--select_subtypes', default=[''], multiple=True, help='Selected subtypes if looking to reduce number of labels to predict', show_default=True)
+@click.option('-hyp', '--custom_hyperparameters', default='hyperparameters.yaml', help='Custom hyperparameter yaml file, bed or pickle.', show_default=True, type=click.Path(exists=False))
 def hyperparameter_job(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -367,7 +392,8 @@ def hyperparameter_job(train_methyl_array,
 						number_sets,
 						use_set,
 						gene_context,
-						select_subtypes):
+						select_subtypes,
+						custom_hyperparameters):
 
 	hyperparameter_job_(train_methyl_array,
 							val_methyl_array,
@@ -399,7 +425,8 @@ def hyperparameter_job(train_methyl_array,
 							number_sets,
 							use_set,
 							gene_context,
-							select_subtypes)
+							select_subtypes,
+							custom_hyperparameters)
 
 
 

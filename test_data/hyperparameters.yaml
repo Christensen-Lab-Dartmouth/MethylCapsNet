@@ -1,0 +1,2 @@
+nehl: {low: 5, high: 30, step: 5}
+min_capsule_len: {low: 5, high: 30, step: 5}

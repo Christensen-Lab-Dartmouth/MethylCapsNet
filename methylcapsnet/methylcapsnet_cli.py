@@ -53,7 +53,7 @@ def methylcaps():
 @click.option('-cl', '--custom_loss', default='none', help='Specify custom loss function.', show_default=True, type=click.Choice(['none','cox']))
 @click.option('-g2', '--gamma2', default=1e-2, help='How much to weight custom loss.', show_default=True)
 @click.option('-j', '--job', default=0, help='Job number.', show_default=True)
-@click.option('-cc', '--capsule_choice', default=['genomic_binned'], multiple=True, help='Specify multiple sets of capsules to include. Cannot specify both custom_bed and custom_set.', show_default=True, type=click.Choice(['genomic_binned','custom_bed','custom_set','UCSC_RefGene_Name','UCSC_RefGene_Accession', 'UCSC_RefGene_Group', 'UCSC_CpG_Islands_Name', 'Relation_to_UCSC_CpG_Island', 'Phantom', 'DMR', 'Enhancer', 'HMM_Island', 'Regulatory_Feature_Name', 'Regulatory_Feature_Group', 'DHS']))# ADD LOLA!!!
+@click.option('-cc', '--capsule_choice', default=['genomic_binned'], multiple=True, help='Specify multiple sets of capsules to include. Cannot specify both custom_bed and custom_set.', show_default=True, type=click.Choice(["GSEA",'genomic_binned','custom_bed','custom_set','UCSC_RefGene_Name','UCSC_RefGene_Accession', 'UCSC_RefGene_Group', 'UCSC_CpG_Islands_Name', 'Relation_to_UCSC_CpG_Island', 'Phantom', 'DMR', 'Enhancer', 'HMM_Island', 'Regulatory_Feature_Name', 'Regulatory_Feature_Group', 'DHS']))# ADD LOLA!!!
 @click.option('-cf', '--custom_capsule_file', default='', help='Custom capsule file, bed or pickle.', show_default=True, type=click.Path(exists=False))
 @click.option('-t', '--test_methyl_array', default='./train_val_test_sets/test_methyl_array.pkl', help='Test database for beta and phenotype data.', type=click.Path(exists=False), show_default=True)
 @click.option('-pr', '--predict', is_flag=True, help='Predict on MethlyCapsNet.', show_default=True)
@@ -65,6 +65,8 @@ def methylcaps():
 @click.option('-st', '--use_set', is_flag=True, help='Use sets or genes within sets.', show_default=True)
 @click.option('-gc', '--gene_context', is_flag=True, help='Use upstream and gene body contexts for gsea analysis.', show_default=True)
 @click.option('-ss', '--select_subtypes', default=[''], multiple=True, help='Selected subtypes if looking to reduce number of labels to predict', show_default=True)
+@click.option('-fp', '--fit_pas', is_flag=True, help='Fit PASNet for feature selection.', show_default=True)
+@click.option('-l1l2', '--l1_l2', default='', help='L1, L2 penalization, comma delimited.', type=click.Path(exists=False), show_default=True)
 def model_capsnet(train_methyl_array,
 					val_methyl_array,
 					interest_col,
@@ -94,7 +96,9 @@ def model_capsnet(train_methyl_array,
 					number_sets,
 					use_set,
 					gene_context,
-					select_subtypes):
+					select_subtypes,
+					fit_pas,
+					l1_l2):
 
 	model_capsnet_(train_methyl_array,
 						val_methyl_array,
@@ -125,7 +129,69 @@ def model_capsnet(train_methyl_array,
 						number_sets,
 						use_set,
 						gene_context,
-						list(filter(None,select_subtypes)))
+						list(filter(None,select_subtypes)),
+						fit_pas,
+						l1_l2)
+
+@methylcaps.command()
+@click.option('-pm', '--pasnet_model', default='pasnet_model.pkl', help='Path to PASNet model to extract pathway importances.', type=click.Path(exists=False), show_default=True)
+@click.option('-pcf', '--pasnet_config', default='pasnet_config.pkl', help='Path to PASNet model configuration to extract pathway importances.', type=click.Path(exists=False), show_default=True)
+@click.option('-n', '--n_capsules', default=0, help='Number pathways to extract.', show_default=True)
+@click.option('-csv', '--feature_csv', default='pasnet_importances.csv', help='All extracted pathway importances.', type=click.Path(exists=False), show_default=True)
+@click.option('-txt', '--capsule_txt', default='custom_capsules.txt', help='Where to extract custom capsules.', type=click.Path(exists=False), show_default=True)
+def extract_capsules(pasnet_model,pasnet_config,n_capsules,feature_csv,capsule_txt):
+	from methylcapsnet.methylcaps_data_models import MethylPASNet
+	pasnet_config=torch.load(pasnet_config)
+	module_names=pasnet_config.pop('module_names')
+	model=MethylPASNet(**pasnet_config)
+	model.load_state_dict(torch.load(pasnet_model))
+	importances=model.calc_pathway_importances()
+	importances=pd.Series(importances,index=module_names).sort_values(ascending=False)
+	pd.DataFrame(importances).to_csv(feature_csv)
+	with open(capsule_txt,'w') as f:
+		f.write('\n'.join((importances.iloc[:n_capsules] if n_capsules else importances).index.values.tolist()))
+
+@methylcaps.command()
+@click.option('-i', '--train_methyl_array', default='./train_val_test_sets/train_methyl_array.pkl', help='Input database for beta and phenotype data.', type=click.Path(exists=False), show_default=True)
+@click.option('-v', '--val_methyl_array', default='./train_val_test_sets/val_methyl_array.pkl', help='Test database for beta and phenotype data.', type=click.Path(exists=False), show_default=True)
+@click.option('-ic', '--interest_col', default='disease', help='Specify column looking to make predictions on.', show_default=True)
+@click.option('-ss', '--select_subtypes', default=[''], multiple=True, help='Selected subtypes if looking to reduce number of labels to predict', show_default=True)
+@click.option('-cp', '--capsules_pickle', default='pasnet_capsules.pkl', help='Path to PASNet model capsules.', type=click.Path(exists=False), show_default=True)
+@click.option('-nb', '--n_bins', default=0, help='Number of bins if column is continuous variable.', show_default=True)
+@click.option('-pcf', '--pas_config', default='pasnet_config.pkl', help='Path to PASNet model configuration to extract pathway importances.', type=click.Path(exists=False), show_default=True)
+@click.option('-pm', '--model_state_dict_pkl', default='pasnet_model.pkl', help='Path to PASNet model to extract pathway importances.', type=click.Path(exists=False), show_default=True)
+@click.option('-bs', '--batch_size', default=32, help='Batch size.', show_default=True)
+@click.option('-n', '--n_capsules', default=0, help='Number pathways to extract.', show_default=True)
+@click.option('-txt', '--capsule_txt', default='custom_capsules.txt', help='Where to extract custom capsules.', type=click.Path(exists=False), show_default=True)
+def return_pas_importances(train_methyl_array,
+                            val_methyl_array,
+                            interest_col,
+                            select_subtypes,
+                            capsules_pickle,
+                            n_bins,
+                            pas_config,
+                            model_state_dict_pkl,
+                            batch_size,
+							n_capsules,
+							capsule_txt):
+	from methylcapsnet.methylcaps_interpret import return_pas_importances_
+
+	importances=return_pas_importances_(train_methyl_array,
+	                            val_methyl_array,
+	                            interest_col,
+	                            list(filter(None,select_subtypes)),
+	                            capsules_pickle,
+	                            False,
+	                            n_bins,
+	                            pas_config,
+	                            model_state_dict_pkl,
+	                            batch_size)
+
+	pd.DataFrame(importances).to_csv(feature_csv)
+	with open(capsule_txt,'w') as f:
+		f.write('\n'.join((importances.iloc[:n_capsules] if n_capsules else importances).index.values.tolist()))
+
+
 
 
 @methylcaps.command()

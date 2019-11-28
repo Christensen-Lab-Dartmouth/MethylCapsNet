@@ -276,13 +276,42 @@ class CapsNet(nn.Module):
 		loss = margin_loss + recon_loss
 		return loss, margin_loss, recon_loss
 
+class MethylPASNet(nn.Module):
+	def __init__(self, module_lens, hidden_topology, dropout_p, n_output):
+		super(MethylPASNet,self).__init__()
+		modules=[nn.Linear(module_len,1) for module_len in module_lens]
+		for module in modules:
+			torch.nn.init.xavier_uniform_(module.weight)
+		modules=[nn.Sequential(module,nn.ReLU(),nn.BatchNorm1d(module.out_features)) for module in modules]
+		self.pathways=nn.ModuleList(modules)
+		self.output_net=MLP(len(modules), hidden_topology, dropout_p=dropout_p, n_outputs=n_output, binary=False, softmax=True, relu=False)
+		self.loss_fn=nn.CrossEntropyLoss()
+
+	def forward(self, modules_x):
+		X=torch.cat([self.pathways[i](module_x) for i,module_x in enumerate(modules_x)],dim=1)
+		return self.output_net(X)
+
+	def calculate_loss(self, y_pred, y_true):
+		return self.loss_fn(y_pred,y_true)
+
+	def get_pathway_weights(self):
+		return self.output_net.mlp[0][0].weight
+
+	def calc_elastic_norm_loss(self, l1, l2):
+		weights=self.get_pathway_weights()
+		return l1*torch.norm(weights, p=1)+l2*torch.norm(weights, p=2)
+
+	def calc_pathway_importances(self):
+		return torch.sum(self.get_pathway_weights()**2,dim=0).detach().cpu().numpy()
+
+
 class Trainer:
-	def __init__(self, capsnet, validation_dataloader, n_epochs, lr, n_primary, custom_loss, gamma2, class_balance=False):
-		self.capsnet=capsnet
+	def __init__(self, model, validation_dataloader, n_epochs, lr, n_primary, custom_loss, gamma2, class_balance=False, pas_mode=False, l1=0., l2=0.):
+		self.model=model
 		self.validation_dataloader = validation_dataloader
 		self.lr = lr
-		self.optimizer = Adam(self.capsnet.parameters(),self.lr)
-		self.capsnet, self.optimizer = amp.initialize(self.capsnet, self.optimizer, opt_level='O0', loss_scale=1.0)#'dynamic'
+		self.optimizer = Adam(self.model.parameters(),self.lr)
+		self.model, self.optimizer = amp.initialize(self.model, self.optimizer, opt_level='O0', loss_scale=1.0)#'dynamic'
 		self.scheduler=CosineAnnealingLR(self.optimizer, T_max=10, eta_min=0, last_epoch=-1)
 		self.n_epochs = n_epochs
 		self.module_names = self.validation_dataloader.dataset.module_names
@@ -292,6 +321,9 @@ class Trainer:
 		self.custom_loss_fn=dict(none=None,
 								  cox=CoxLoss())[self.custom_loss]
 		self.class_balance = class_balance
+		self.PASMode=pas_mode
+		self.l1=l1
+		self.l2=l2
 
 	def compute_custom_loss(self,y_pred_caps, y_true, y_true_orig):
 		if self.custom_loss=='none':
@@ -307,7 +339,8 @@ class Trainer:
 
 	#@pysnooper.snoop('fit_model.log')
 	def fit(self, dataloader):
-		self.initialize_dirs()
+		if not self.PASMode:
+			self.initialize_dirs()
 		if self.class_balance:
 			self.weights=torch.tensor(compute_class_weight('balanced',np.arange(len(dataloader.dataset.binarizer.classes_)),np.argmax(dataloader.dataset.y,axis=1)),dtype=torch.float)
 			if torch.cuda.is_available():
@@ -315,7 +348,7 @@ class Trainer:
 		else:
 			self.weights=1.
 		self.losses=dict(train=[],val=[])
-		best_model = self.capsnet
+		best_model = self.model
 		self.val_losses=[]
 		for epoch in range(self.n_epochs):
 			self.epoch=epoch
@@ -324,8 +357,8 @@ class Trainer:
 			self.val_losses.append(val_loss[0])
 			self.losses['val'].append(val_loss)
 			if val_loss[0]<=min(self.val_losses):
-				best_model=copy.deepcopy(self.capsnet)
-		self.capsnet=best_model
+				best_model=copy.deepcopy(self.model)
+		self.model=best_model
 		return self
 
 	def predict(self, dataloader):
@@ -336,7 +369,7 @@ class Trainer:
 
 	#@pysnooper.snoop('train_loop.log')
 	def train_loop(self, dataloader):
-		self.capsnet.train(True)
+		self.model.train(True)
 		running_loss=0.
 		Y={'true':[],'pred':[]}
 		n_batch=(len(dataloader.dataset.y_orig)//dataloader.batch_size)
@@ -351,16 +384,26 @@ class Trainer:
 				y_true=y_true.cuda()
 				#y_true_orig=y_true_orig.cuda()
 				module_x=[mod.cuda() for mod in module_x]
-			x_orig, x_hat, y_pred, embedding, primary_caps_out=self.capsnet(x_orig,module_x)
-			loss,margin_loss,recon_loss=self.capsnet.calculate_loss(x_orig, x_hat, y_pred, y_true, weights=self.weights)
+			if not self.PASMode:
+				x_orig, x_hat, y_pred, embedding, primary_caps_out=self.model(x_orig,module_x)
+				loss,margin_loss,recon_loss=self.model.calculate_loss(x_orig, x_hat, y_pred, y_true, weights=self.weights)
+			else:
+				y_true=y_true.argmax(1)
+				y_pred=self.model(module_x)
+				loss=self.model.calculate_loss(y_pred,y_true)+self.model.calc_elastic_norm_loss(self.l1,self.l2)
+				margin_loss=loss
 			#loss=loss+self.gamma2*self.compute_custom_loss(y_pred, y_true, y_true_orig)
 			self.optimizer.zero_grad()
 			with amp.scale_loss(loss,self.optimizer) as scaled_loss, detect_anomaly():
 				scaled_loss.backward()
 			#loss.backward()
 			self.optimizer.step()
-			Y['true'].extend(y_true.argmax(1).detach().cpu().numpy().flatten().astype(int).tolist())
-			Y['pred'].extend(F.softmax(torch.sqrt((y_pred**2).sum(2))).argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
+			if not self.PASMode:
+				Y['true'].extend(y_true.argmax(1).detach().cpu().numpy().flatten().astype(int).tolist())
+				Y['pred'].extend(F.softmax(torch.sqrt((y_pred**2).sum(2))).argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
+			else:
+				Y['true'].extend(y_true.detach().cpu().numpy().flatten().astype(int).tolist())
+				Y['pred'].extend(y_pred.argmax(1).detach().cpu().numpy().flatten().astype(int).tolist())
 			train_loss=margin_loss.item()#print(loss)
 			print('Epoch {} [{}/{}]: Train Loss {}'.format(self.epoch,i,n_batch,train_loss))
 			running_loss+=train_loss
@@ -375,7 +418,7 @@ class Trainer:
 
 	#@pysnooper.snoop('val_loop.log')
 	def val_test_loop(self, dataloader):
-		self.capsnet.train(False)
+		self.model.train(False)
 		running_loss=np.zeros((3,)).astype(float)
 		n_batch=int(np.ceil(len(dataloader.dataset.y_orig)/dataloader.batch_size))
 		Y={'true':[],'pred':[],'embedding_primarycaps_aligned':[],'embedding_primarycaps':[],'embedding_primarycaps_cat':[],'embedding_outputcaps':[],'routing_weights':[]}
@@ -390,45 +433,61 @@ class Trainer:
 					y_true=y_true.cuda()
 					#y_true_orig=y_true_orig.cuda()
 					module_x=[mod.cuda() for mod in module_x]
-				x_orig, x_hat, y_pred, embedding, primary_caps_out=self.capsnet(x_orig,module_x)
-				loss,margin_loss,recon_loss=self.capsnet.calculate_loss(x_orig, x_hat, y_pred, y_true, weights=self.weights)
+				if not self.PASMode:
+					x_orig, x_hat, y_pred, embedding, primary_caps_out=self.model(x_orig,module_x)
+					loss,margin_loss,recon_loss=self.model.calculate_loss(x_orig, x_hat, y_pred, y_true, weights=self.weights)
+				else:
+					y_true=y_true.argmax(1)
+					y_pred=self.model(module_x)
+					loss=self.model.calculate_loss(y_pred,y_true)+self.model.calc_elastic_norm_loss(self.l1,self.l2)
+					margin_loss=loss
 				#loss=loss+self.gamma2*self.compute_custom_loss(y_pred, y_true, y_true_orig)
 				val_loss=margin_loss.item()#print(loss)
 				print('Epoch {} [{}/{}]: Val Loss {}'.format(self.epoch,i,n_batch,val_loss))
-				running_loss=running_loss+np.array([loss.item(),margin_loss,recon_loss.item()])
-
-				routing_coefs=self.capsnet.caps_output_layer.return_routing_coef().detach().cpu().numpy()
-				#print(routing_coefs.shape)
-				routing_coefs=routing_coefs[...,0,0]
-				#print(routing_coefs.shape)
-				Y['routing_weights'].append(routing_coefs)#pd.DataFrame(routing_coefs.T,index=dataloader.dataset.binarizer.classes_,columns=dataloader.dataset.module_names)
-				Y['embedding_primarycaps'].append(torch.cat([primary_caps_out[i] for i in range(x_orig.size(0))],dim=0).detach().cpu().numpy())
-				primary_caps_out=primary_caps_out.view(primary_caps_out.size(0),primary_caps_out.size(1)*primary_caps_out.size(2))
-				Y['embedding_outputcaps'].append(embedding.detach().cpu().numpy())
-				Y['embedding_primarycaps_cat'].append(primary_caps_out.detach().cpu().numpy())
-				primary_caps_aligned=self.capsnet.caps_output_layer.return_embedding_previous_layer()
-				Y['embedding_primarycaps_aligned'].append(primary_caps_aligned.detach().cpu().numpy()) # [...,0,:] torch.cat([primary_caps_aligned[i] for i in range(x_orig.size(0))],dim=0)
-				Y['true'].extend(y_true.argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
-				Y['pred'].extend((y_pred**2).sum(2).argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
+				running_loss=running_loss+np.array([loss.item(),margin_loss,recon_loss.item() if not self.PASMode else 0.])
+				if not self.PASMode:
+					routing_coefs=self.model.caps_output_layer.return_routing_coef().detach().cpu().numpy()
+					#print(routing_coefs.shape)
+					routing_coefs=routing_coefs[...,0,0]
+					#print(routing_coefs.shape)
+					Y['routing_weights'].append(routing_coefs)#pd.DataFrame(routing_coefs.T,index=dataloader.dataset.binarizer.classes_,columns=dataloader.dataset.module_names)
+					Y['embedding_primarycaps'].append(torch.cat([primary_caps_out[i] for i in range(x_orig.size(0))],dim=0).detach().cpu().numpy())
+					primary_caps_out=primary_caps_out.view(primary_caps_out.size(0),primary_caps_out.size(1)*primary_caps_out.size(2))
+					Y['embedding_outputcaps'].append(embedding.detach().cpu().numpy())
+					Y['embedding_primarycaps_cat'].append(primary_caps_out.detach().cpu().numpy())
+					primary_caps_aligned=self.model.caps_output_layer.return_embedding_previous_layer()
+					Y['embedding_primarycaps_aligned'].append(primary_caps_aligned.detach().cpu().numpy()) # [...,0,:] torch.cat([primary_caps_aligned[i] for i in range(x_orig.size(0))],dim=0)
+					Y['true'].extend(y_true.argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
+					Y['pred'].extend((y_pred**2).sum(2).argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
+				else:
+					Y['true'].extend(y_true.detach().cpu().numpy().flatten().astype(int).tolist())
+					Y['pred'].extend(y_pred.argmax(1).detach().cpu().numpy().flatten().astype(int).tolist())
 			running_loss/=(i+1)
-			#Y['routing_weights'].iloc[:,:]=Y['routing_weights'].values/(i+1)
-			rw=np.concatenate(Y['routing_weights'],axis=0)
-			#print(rw.shape)
-			Y['routing_weights']=xr.DataArray(rw,coords={'sample':dataloader.dataset.sample_names,'primary_capsules':dataloader.dataset.module_names,'output_capsules':dataloader.dataset.binarizer.classes_},
-												dims={'sample':len(dataloader.dataset.sample_names),'primary_capsules':len(dataloader.dataset.module_names),'output_capsules':len(dataloader.dataset.binarizer.classes_)})
-			Y['embedding_primarycaps_aligned']=np.concatenate(Y['embedding_primarycaps_aligned'],axis=0)
-			print(Y['embedding_primarycaps_aligned'].shape)
-			Y['pred']=np.array(Y['pred']).astype(str)
-			Y['true']=np.array(Y['true']).astype(str)
-			print('Epoch {}: Val Loss {}, Margin Loss {}, Recon Loss {}, Val R2: {}, Val MAE: {}'.format(self.epoch,running_loss[0],running_loss[1],running_loss[2],r2_score(Y['true'].astype(float),Y['pred'].astype(float)), mean_absolute_error(Y['true'].astype(float),Y['pred'].astype(float))))
-			print(classification_report(Y['true'],Y['pred']))
-			Y_plot=copy.deepcopy(Y)
-			Y_plot['embedding_primarycaps_aligned']=np.concatenate([Y_plot['embedding_primarycaps_aligned'][i,:,0,:] for i in range(Y_plot['embedding_primarycaps_aligned'].shape[0])],axis=0)
-			#print(Y_plot['embedding_primarycaps_aligned'])
-			self.make_plots(Y_plot, dataloader)
-			self.save_routing_weights(Y)
-			Y['embedding_primarycaps_aligned']=xr.DataArray(Y['embedding_primarycaps_aligned'],coords={'sample':dataloader.dataset.sample_names,'primary_capsules':dataloader.dataset.module_names,'output_capsules':dataloader.dataset.binarizer.classes_,'z_primary':np.arange(Y['embedding_primarycaps_aligned'].shape[3])},
-													dims={'sample':len(dataloader.dataset.sample_names),'primary_capsules':len(dataloader.dataset.module_names),'output_capsules':len(dataloader.dataset.binarizer.classes_),'z_primary':Y['embedding_primarycaps_aligned'].shape[3]})
+			if not self.PASMode:
+				#Y['routing_weights'].iloc[:,:]=Y['routing_weights'].values/(i+1)
+
+				rw=np.concatenate(Y['routing_weights'],axis=0)
+				#print(rw.shape)
+				Y['routing_weights']=xr.DataArray(rw,coords={'sample':dataloader.dataset.sample_names,'primary_capsules':dataloader.dataset.module_names,'output_capsules':dataloader.dataset.binarizer.classes_},
+													dims={'sample':len(dataloader.dataset.sample_names),'primary_capsules':len(dataloader.dataset.module_names),'output_capsules':len(dataloader.dataset.binarizer.classes_)})
+				Y['embedding_primarycaps_aligned']=np.concatenate(Y['embedding_primarycaps_aligned'],axis=0)
+				print(Y['embedding_primarycaps_aligned'].shape)
+				Y['pred']=np.array(Y['pred']).astype(str)
+				Y['true']=np.array(Y['true']).astype(str)
+				print('Epoch {}: Val Loss {}, Margin Loss {}, Recon Loss {}, Val R2: {}, Val MAE: {}'.format(self.epoch,running_loss[0],running_loss[1],running_loss[2],r2_score(Y['true'].astype(float),Y['pred'].astype(float)), mean_absolute_error(Y['true'].astype(float),Y['pred'].astype(float))))
+				print(classification_report(Y['true'],Y['pred']))
+				Y_plot=copy.deepcopy(Y)
+				Y_plot['embedding_primarycaps_aligned']=np.concatenate([Y_plot['embedding_primarycaps_aligned'][i,:,0,:] for i in range(Y_plot['embedding_primarycaps_aligned'].shape[0])],axis=0)
+				#print(Y_plot['embedding_primarycaps_aligned'])
+				self.make_plots(Y_plot, dataloader)
+				self.save_routing_weights(Y)
+				Y['embedding_primarycaps_aligned']=xr.DataArray(Y['embedding_primarycaps_aligned'],coords={'sample':dataloader.dataset.sample_names,'primary_capsules':dataloader.dataset.module_names,'output_capsules':dataloader.dataset.binarizer.classes_,'z_primary':np.arange(Y['embedding_primarycaps_aligned'].shape[3])},
+														dims={'sample':len(dataloader.dataset.sample_names),'primary_capsules':len(dataloader.dataset.module_names),'output_capsules':len(dataloader.dataset.binarizer.classes_),'z_primary':Y['embedding_primarycaps_aligned'].shape[3]})
+			else:
+				Y['pred']=np.array(Y['pred']).astype(str)
+				Y['true']=np.array(Y['true']).astype(str)
+				print('Epoch {}: Val Loss {}, Margin Loss {}, Recon Loss {}, Val R2: {}, Val MAE: {}'.format(self.epoch,running_loss[0],running_loss[1],running_loss[2],r2_score(Y['true'].astype(float),Y['pred'].astype(float)), mean_absolute_error(Y['true'].astype(float),Y['pred'].astype(float))))
+				print(classification_report(Y['true'],Y['pred']))
 		return running_loss, Y
 
 	#@pysnooper.snoop('plots.log')
