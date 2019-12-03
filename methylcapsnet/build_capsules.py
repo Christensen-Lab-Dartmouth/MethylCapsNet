@@ -137,27 +137,35 @@ def divide_chunks(l, n):
 		yield l[i:i + n]
 
 #@pysnooper.snoop('gsea_build.log')
-def return_gsea_capsules(ma=None,tissue='',context_on=False,use_set=False,gsea_superset='H',n_top_sets=25,min_capsule_len=2000):
+def return_gsea_capsules(ma=None,tissue='',context_on=False,use_set=False,gsea_superset='H',n_top_sets=25,min_capsule_len=2000, all_genes=False):
 	global gene2cpg, gsea_collections, gene_set_weights
 	allcpgs=ma.beta.columns.values
 	entire_sets=use_set
 	collection=gsea_superset
-	gsea=pickle.load(open(gsea_collections,'rb'))
-	gene_sets=pd.read_csv(gene_set_weights[collection],sep='\t',index_col=0)[tissue].sort_values(ascending=False).index.tolist() if tissue else list(gsea[collection].keys())
 	gene2cpg=pickle.load(open(gene2cpg,'rb'))
+	if all_genes:
+		gene_sets=list(gene2cpg.keys())
+	else:
+		gsea=pickle.load(open(gsea_collections,'rb'))
+		if tissue:
+			gene_sets=pd.read_csv(gene_set_weights[collection],sep='\t',index_col=0)[tissue].sort_values(ascending=False).index.tolist()
+		else:
+			gene_sets=list(gsea[collection].keys())
 	if not tissue:
 		n_top_sets=0
-	if n_top_sets:
+	if n_top_sets and not all_genes:
 		gene_sets=gene_sets[:n_top_sets]
 
 	capsules=dict()
+	if all_genes:
+		entire_sets=False
 	if entire_sets:
 		context_on=False
 
 	def process_gene_set(gene_set):
 		capsules=[]
 		gene_set_cpgs=[]
-		for genename in gsea[collection][gene_set]:
+		for genename in (gsea[collection][gene_set] if not all_genes else [gene_set]):
 			gene=gene2cpg.get(genename,{'Gene':[],'Upstream':[]})
 			if context_on:
 				for k in ['Gene','Upstream']:
@@ -175,7 +183,7 @@ def return_gsea_capsules(ma=None,tissue='',context_on=False,use_set=False,gsea_s
 					cpg_set=np.union1d(gene,upstream)
 					if cpg_set.tolist():
 						gene_set_cpgs.append(cpg_set)
-		if entire_sets:
+		if entire_sets and not all_genes:
 			capsules.append((gene_set,reduce(np.union1d,gene_set_cpgs).tolist()))
 			#capsules[gene_set]=reduce(np.union1d,gene_set_cpgs).tolist()
 		return capsules
@@ -216,6 +224,7 @@ def return_gsea_capsules(ma=None,tissue='',context_on=False,use_set=False,gsea_s
 	modules = list(capsules.values())#[capsules[capsule] for capsule in capsules if capsules[capsule]]
 	modulecpgs=reduce(np.union1d,modules).tolist()
 	module_names=list(capsules.keys())
+	client.close()
 	return modules,modulecpgs,module_names
 
 def build_capsules(capsule_choice,
@@ -266,8 +275,8 @@ def build_capsules(capsule_choice,
 		finalcpgs.extend(modulecpgs)
 		capsule_names.extend(module_names)
 
-	if "GSEA" in capsule_choice and gsea_superset:
-		final_modules,modulecpgs,module_names=return_gsea_capsules(ma=ma,tissue=tissue,context_on=gene_context,use_set=use_set,gsea_superset=gsea_superset,n_top_sets=number_sets,min_capsule_len=min_capsule_len)
+	if ("GSEA" in capsule_choice and gsea_superset) or 'all_gene_sets' in capsule_choice:
+		final_modules,modulecpgs,module_names=return_gsea_capsules(ma=ma,tissue=tissue,context_on=gene_context,use_set=use_set,gsea_superset=gsea_superset,n_top_sets=number_sets,min_capsule_len=min_capsule_len, all_genes=('all_gene_sets' in capsule_choice))
 		capsules.extend(final_modules)
 		finalcpgs.extend(modulecpgs)
 		capsule_names.extend(module_names)

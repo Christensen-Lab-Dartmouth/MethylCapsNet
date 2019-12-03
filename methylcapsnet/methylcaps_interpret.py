@@ -1,7 +1,7 @@
 from methylcapsnet.samplers import ImbalancedDatasetSampler
 from pymethylprocess.MethylationDataTypes import MethylationArray
 import numpy as np, pandas as pd
-from captum import GradientShap
+from captum.attr import GradientShap
 import torch
 from torch.utils.data import DataLoader, Dataset, TensorDataset
 from methylcapsnet.methylcaps_data_models import *
@@ -49,8 +49,8 @@ def return_pas_importances_(train_methyl_array,
 		interest_col=new_interest_col
 
 	datasets=dict()
-	datasets['train']=MethylationDataset(ma,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col)
-	datasets['val']=MethylationDataset(ma_v,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col)
+	datasets['train']=MethylationDataset(ma,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col, run_pas=True)
+	datasets['val']=MethylationDataset(ma_v,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col, run_pas=True)
 
 	dataloaders=dict()
 	dataloaders['train']=DataLoader(datasets['train'],batch_size=batch_size,shuffle=True,num_workers=8, pin_memory=True, drop_last=True)
@@ -70,31 +70,34 @@ def return_pas_importances_(train_methyl_array,
 
 	pathway_extractor=model.pathways
 
-	extract_pathways = lambda modules_x:torch.cat([pathway_extractor[i](module_x) for i,module_x in enumerate(modules_x)],dim=1)
+	#extract_pathways = lambda modules_x:torch.cat([pathway_extractor[i](module_x) for i,module_x in enumerate(modules_x)],dim=1)
 
 	tensor_data=dict(train=dict(X=[],y=[]),val=dict(X=[],y=[]))
 
 	for k in tensor_data:
 		for i,(batch) in enumerate(dataloaders[k]):
-			y_true=batch[-1]#[-2]
+			x = batch[0]
+			y_true=batch[-1].argmax(1)#[-2]
 			modules_x = batch[1:-1]#2]
 			if torch.cuda.is_available():
-				modules_x=[module.cuda() for module in modules_x]
-			tensor_data[k]['X'].append(extract_pathways(modules_x).detach().cpu())
+				x=x.cuda()
+				modules_x=modules_x[0].cuda()#[module.cuda() for module in modules_x]
+			tensor_data[k]['X'].append(pathway_extractor(x,modules_x).detach().cpu())#extract_pathways(modules_x).detach().cpu())
 			tensor_data[k]['y'].append(y_true.flatten().view(-1,1))
 		tensor_data[k]['X']=torch.cat(tensor_data[k]['X'],dim=0)
 		tensor_data[k]['y']=torch.cat(tensor_data[k]['y'],dim=0)
+		print(tensor_data[k]['X'].size(),tensor_data[k]['y'].size())
 		tensor_data[k]=TensorDataset(tensor_data[k]['X'],tensor_data[k]['y'])
 		dataloaders[k]=DataLoader(tensor_data[k],batch_size=32,sampler=ImbalancedDatasetSampler(tensor_data[k]))
 
 	model=model.output_net
 	to_cuda=lambda x: x.cuda() if torch.cuda.is_available() else x
-	y=np.unique(tensor_data['train'].tensors[1].numpy())
+	y=np.unique(tensor_data['train'].tensors[1].numpy().flatten())
 	gs = GradientShap(model)
 	X_train=torch.cat([next(iter(dataloaders['train']))[0] for i in range(2)],dim=0)
 	if torch.cuda.is_available():
 		X_train=X_train.cuda()
 	attributions = torch.sum(torch.cat([torch.abs(gs.attribute(to_cuda(next(iter(dataloaders['val']))[0]), stdevs=0.09, n_samples=20, baselines=X_train,
-									   target=y_i, return_convergence_delta=False)) for i in range(20) for y_i in y],dim=0),dim=0)
+									   target=torch.tensor(y_i), return_convergence_delta=False)) for i in range(20) for y_i in y],dim=0),dim=0)
 	importances=pd.Series(attributions.detach().cpu().numpy(),index=module_names).sort_values(ascending=False)
 	return importances

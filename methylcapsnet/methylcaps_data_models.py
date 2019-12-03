@@ -22,6 +22,7 @@ import xarray as xr
 #from sksurv.linear_model.coxph import BreslowEstimator
 from sklearn.utils.class_weight import compute_class_weight
 from apex import amp
+import torch_scatter
 RANDOM_SEED=42
 np.random.seed(RANDOM_SEED)
 torch.manual_seed(RANDOM_SEED)
@@ -49,7 +50,7 @@ class BCEWithNan(object):
 
 
 class MethylationDataset(Dataset):
-	def __init__(self, methyl_arr, outcome_col,binarizer=None, modules=[], module_names=None, original_interest_col=None):
+	def __init__(self, methyl_arr, outcome_col,binarizer=None, modules=[], module_names=None, original_interest_col=None, run_pas=False):
 		if binarizer==None:
 			binarizer=LabelBinarizer()
 			binarizer.fit(methyl_arr.pheno[outcome_col].astype(str).values)
@@ -60,6 +61,11 @@ class MethylationDataset(Dataset):
 		if not modules:
 			modules=[list(methyl_arr.beta)]
 		self.modules=modules
+		if run_pas:
+			self.idx=torch.tensor(np.array(list(reduce(lambda x,y:[[i]*len(module) for i,module in enumerate(self.modules)]))),dtype=torch.long)#torch.tensor(reduce(lambda x,y:x+y,self.modules))
+		else:
+			self.idx=None
+		self.run_pas=run_pas
 		self.X=methyl_arr.beta
 		print('Null val',self.X.isnull().sum().sum())
 		self.length=methyl_arr.beta.shape[0]
@@ -67,13 +73,14 @@ class MethylationDataset(Dataset):
 		self.pheno = methyl_arr.pheno
 		self.sample_names=self.pheno.index.values
 
+
 	def __len__(self):
 		return self.length
 
 	#@pysnooper.snoop('getitem.log')
 	def __getitem__(self,i):
 		X=[torch.FloatTensor(self.X.iloc[i].values)]
-		modules=[torch.FloatTensor(self.X.iloc[i].loc[module].values) for module in self.modules] # .reshape(1,-1)
+		modules=[torch.FloatTensor(self.X.iloc[i].loc[module].values) for module in self.modules] if not self.run_pas else [self.idx] # .reshape(1,-1) if not
 		y=[torch.FloatTensor(self.y[i])]
 		#y_orig=[torch.FloatTensor(self.y_orig[i].reshape(1,1))]
 		return tuple(X+modules+y)#+y_orig)
@@ -276,20 +283,42 @@ class CapsNet(nn.Module):
 		loss = margin_loss + recon_loss
 		return loss, margin_loss, recon_loss
 
+class PASModulesLayer(nn.Module):
+	def __init__(self, n_input,n_output):
+		super(PASModulesLayer,self).__init__()
+		self.weight=nn.Parameter(torch.zeros(n_input,1))
+		torch.nn.init.xavier_uniform_(self.params)
+		self.bias=nn.Parameter(torch.zeros(n_output,1))
+		self.relu=nn.ReLU()
+		self.n_output=n_output
+
+
+	def forward(self,x,idx):
+		return torch_scatter.scatter_add(x*self.weight.expand_as(x),idx,dim_size=self.n_output)+self.bias
+
+
+
 class MethylPASNet(nn.Module):
 	def __init__(self, module_lens, hidden_topology, dropout_p, n_output):
 		super(MethylPASNet,self).__init__()
-		modules=[nn.Linear(module_len,1) for module_len in module_lens]
-		for module in modules:
-			torch.nn.init.xavier_uniform_(module.weight)
-		modules=[nn.Sequential(module,nn.ReLU(),nn.BatchNorm1d(module.out_features)) for module in modules]
-		self.pathways=nn.ModuleList(modules)
+		if 0:
+			modules=[nn.Linear(module_len,1) for module_len in module_lens]
+			for module in modules:
+				torch.nn.init.xavier_uniform_(module.weight)
+			modules=[nn.Sequential(module,nn.ReLU(),nn.BatchNorm1d(module.out_features)) for module in modules]
+			self.pathways=nn.ModuleList(modules)
+		self.pathways=PASModulesLayer(sum(module_lens),len(module_lens))
 		self.output_net=MLP(len(modules), hidden_topology, dropout_p=dropout_p, n_outputs=n_output, binary=False, softmax=True, relu=False)
 		self.loss_fn=nn.CrossEntropyLoss()
 
-	def forward(self, modules_x):
-		X=torch.cat([self.pathways[i](module_x) for i,module_x in enumerate(modules_x)],dim=1)
+	def forward(self, x, idx):
+		X=self.pathways(x,idx)
 		return self.output_net(X)
+
+	if 0:
+		def forward(self, modules_x):
+			X=torch.cat([self.pathways[i](module_x) for i,module_x in enumerate(modules_x)],dim=1)
+			return self.output_net(X)
 
 	def calculate_loss(self, y_pred, y_true):
 		return self.loss_fn(y_pred,y_true)
@@ -383,13 +412,13 @@ class Trainer:
 				x_orig=x_orig.cuda()
 				y_true=y_true.cuda()
 				#y_true_orig=y_true_orig.cuda()
-				module_x=[mod.cuda() for mod in module_x]
+				module_x=[mod.cuda() for mod in module_x] if not self.PASMode else module_x[0].cuda()
 			if not self.PASMode:
 				x_orig, x_hat, y_pred, embedding, primary_caps_out=self.model(x_orig,module_x)
 				loss,margin_loss,recon_loss=self.model.calculate_loss(x_orig, x_hat, y_pred, y_true, weights=self.weights)
 			else:
 				y_true=y_true.argmax(1)
-				y_pred=self.model(module_x)
+				y_pred=self.model(x_orig,module_x)
 				loss=self.model.calculate_loss(y_pred,y_true)+self.model.calc_elastic_norm_loss(self.l1,self.l2)
 				margin_loss=loss
 			#loss=loss+self.gamma2*self.compute_custom_loss(y_pred, y_true, y_true_orig)
@@ -432,13 +461,13 @@ class Trainer:
 					x_orig=x_orig.cuda()
 					y_true=y_true.cuda()
 					#y_true_orig=y_true_orig.cuda()
-					module_x=[mod.cuda() for mod in module_x]
+					module_x=[mod.cuda() for mod in module_x] if not self.PASMode else module_x[0].cuda()
 				if not self.PASMode:
 					x_orig, x_hat, y_pred, embedding, primary_caps_out=self.model(x_orig,module_x)
 					loss,margin_loss,recon_loss=self.model.calculate_loss(x_orig, x_hat, y_pred, y_true, weights=self.weights)
 				else:
 					y_true=y_true.argmax(1)
-					y_pred=self.model(module_x)
+					y_pred=self.model(x_orig,module_x)
 					loss=self.model.calculate_loss(y_pred,y_true)+self.model.calc_elastic_norm_loss(self.l1,self.l2)
 					margin_loss=loss
 				#loss=loss+self.gamma2*self.compute_custom_loss(y_pred, y_true, y_true_orig)

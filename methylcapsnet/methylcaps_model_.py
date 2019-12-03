@@ -67,7 +67,8 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 					gene_context=False,
 					select_subtypes=[],
 					fit_pas=False,
-					l1_l2=''):
+					l1_l2='',
+					custom_capsule_file2=''):
 
 	capsule_choice=list(capsule_choice)
 	#custom_capsule_file=list(custom_capsule_file)
@@ -108,19 +109,25 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 			ma_t.pheno=ma_t.pheno.loc[ma_t.pheno[interest_col].isin(select_subtypes)]
 			ma_t.beta=ma_t.beta.loc[ma_t.pheno.index]
 
-	final_modules, modulecpgs, module_names=build_capsules(capsule_choice,
-															overlap,
-															bin_len,
-															ma,
-															include_last,
-															min_capsule_len,
-															custom_capsule_file,
-															gsea_superset,
-															tissue,
-															gene_context,
-															use_set,
-															number_sets,
-															limited_capsule_names_file)
+	if custom_capsule_file2 and os.path.exists(custom_capsule_file2):
+		capsules_dict=torch.load(custom_capsule_file2)
+		final_modules, modulecpgs, module_names=capsules_dict['final_modules'], capsules_dict['modulecpgs'], capsules_dict['module_names']
+	else:
+		final_modules, modulecpgs, module_names=build_capsules(capsule_choice,
+																overlap,
+																bin_len,
+																ma,
+																include_last,
+																min_capsule_len,
+																custom_capsule_file,
+																gsea_superset,
+																tissue,
+																gene_context,
+																use_set,
+																number_sets,
+																limited_capsule_names_file)
+		if custom_capsule_file2:
+			torch.save(dict(final_modules=final_modules, modulecpgs=modulecpgs, module_names=module_names),custom_capsule_file2)
 
 	print(ma.beta.isnull().sum().sum())
 	if not include_last: # ERROR HAPPENS HERE!
@@ -141,11 +148,11 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 
 	datasets=dict()
 
-	datasets['train']=MethylationDataset(ma,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col)
+	datasets['train']=MethylationDataset(ma,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col, run_pas=fit_pas)
 	print(datasets['train'].X.isnull().sum().sum())
-	datasets['val']=MethylationDataset(ma_v,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col)
+	datasets['val']=MethylationDataset(ma_v,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col, run_pas=fit_pas)
 	if test_methyl_array and predict:
-		datasets['test']=MethylationDataset(ma_t,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col)
+		datasets['test']=MethylationDataset(ma_t,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col, run_pas=fit_pas)
 
 	dataloaders=dict()
 
