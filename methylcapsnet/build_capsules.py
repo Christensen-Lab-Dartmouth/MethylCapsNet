@@ -137,8 +137,13 @@ def divide_chunks(l, n):
 		yield l[i:i + n]
 
 #@pysnooper.snoop('gsea_build.log')
-def return_gsea_capsules(ma=None,tissue='',context_on=False,use_set=False,gsea_superset='H',n_top_sets=25,min_capsule_len=2000, all_genes=False):
+def return_gsea_capsules(ma=None,tissue='',context_on=False,use_set=False,gsea_superset='H',n_top_sets=25,min_capsule_len=2000, all_genes=False, union_cpgs=True, limited_capsule_names_file=''):
 	global gene2cpg, gsea_collections, gene_set_weights
+	if limited_capsule_names_file:
+		with open(limited_capsule_names_file) as f:
+			limited_capsule_names=f.read().replace('\n',' ').split()
+	else:
+		limited_capsule_names=[]
 	allcpgs=ma.beta.columns.values
 	entire_sets=use_set
 	collection=gsea_superset
@@ -148,9 +153,19 @@ def return_gsea_capsules(ma=None,tissue='',context_on=False,use_set=False,gsea_s
 	else:
 		gsea=pickle.load(open(gsea_collections,'rb'))
 		if tissue:
-			gene_sets=pd.read_csv(gene_set_weights[collection],sep='\t',index_col=0)[tissue].sort_values(ascending=False).index.tolist()
+			gene_sets=pd.read_csv(gene_set_weights[collection],sep='\t',index_col=0)
+			if tissue!='ubiquitous':
+				gene_sets=(gene_sets.quantile(1.,axis=1)-gene_sets.quantile(0.,axis=1)).sort_values().index.tolist()
+			else:
+				gene_sets=gene_sets[tissue].sort_values(ascending=False).index.tolist()
 		else:
 			gene_sets=list(gsea[collection].keys())
+	intersect_context=False
+	if limited_capsule_names_file:
+		gene_sets_tmp=np.intersect1d(gene_sets,limited_capsule_names).tolist()
+		if gene_sets_tmp:
+			gene_sets=gene_sets_tmp
+			intersect_context=True
 	if not tissue:
 		n_top_sets=0
 	if n_top_sets and not all_genes:
@@ -196,12 +211,19 @@ def return_gsea_capsules(ma=None,tissue='',context_on=False,use_set=False,gsea_s
 	with ProgressBar():
 		capsules=dict(list(reduce(lambda x,y: x+y,dask.compute(*[dask.delayed(process_gene_set)(gene_set) for gene_set in gene_sets],scheduler='threading'))))
 
+
 	capsules2=[]
 	#caps_lens=np.array([len(capsules[capsule]) for capsule in capsules])
 
 	cluster = LocalCluster(n_workers=multiprocessing.cpu_count()*2, threads_per_worker=20)
 	client = Client(cluster)
 	capsule_names=list(capsules.keys())
+
+	if intersect_context:
+		capsules_tmp_names=np.intersect1d(capsule_names,limited_capsule_names).tolist()
+		if capsules_tmp_names:
+			capsules={k:capsules[k] for k in capsules_tmp_names}
+
 	print(capsule_names)
 	capsules_bag=db.from_sequence(list(capsules.values()))
 	capsules_intersect=capsules_bag.map(lambda x: np.intersect1d(x,allcpgs))
@@ -222,7 +244,7 @@ def return_gsea_capsules(ma=None,tissue='',context_on=False,use_set=False,gsea_s
 	# 	capsules=dask.compute(capsules2,scheduler='threading')[0]
 	#print(capsules)
 	modules = list(capsules.values())#[capsules[capsule] for capsule in capsules if capsules[capsule]]
-	modulecpgs=reduce(np.union1d,modules).tolist()
+	modulecpgs=reduce((np.union1d if union_cpgs else (lambda x,y:x+y)),modules).tolist()
 	module_names=list(capsules.keys())
 	client.close()
 	return modules,modulecpgs,module_names
@@ -275,8 +297,10 @@ def build_capsules(capsule_choice,
 		finalcpgs.extend(modulecpgs)
 		capsule_names.extend(module_names)
 
-	if ("GSEA" in capsule_choice and gsea_superset) or 'all_gene_sets' in capsule_choice:
-		final_modules,modulecpgs,module_names=return_gsea_capsules(ma=ma,tissue=tissue,context_on=gene_context,use_set=use_set,gsea_superset=gsea_superset,n_top_sets=number_sets,min_capsule_len=min_capsule_len, all_genes=('all_gene_sets' in capsule_choice))
+	gsea_bool=(("GSEA" in capsule_choice and gsea_superset) or 'all_gene_sets' in capsule_choice)
+
+	if gsea_bool:
+		final_modules,modulecpgs,module_names=return_gsea_capsules(ma=ma,tissue=tissue,context_on=gene_context,use_set=use_set,gsea_superset=gsea_superset,n_top_sets=number_sets,min_capsule_len=min_capsule_len, all_genes=('all_gene_sets' in capsule_choice), limited_capsule_names_file=limited_capsule_names_file)
 		capsules.extend(final_modules)
 		finalcpgs.extend(modulecpgs)
 		capsule_names.extend(module_names)
@@ -285,7 +309,7 @@ def build_capsules(capsule_choice,
 	modulecpgs=list(set(finalcpgs))
 	module_names=capsule_names
 
-	if limited_capsule_names_file and not selected_sets:
+	if limited_capsule_names_file and not (selected_sets or gsea_bool):
 		with open(limited_capsule_names_file) as f:
 			limited_capsule_names=f.read().replace('\n',' ').split()
 		capsules=[]

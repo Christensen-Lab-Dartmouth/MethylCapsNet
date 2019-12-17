@@ -100,10 +100,12 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 		pass
 
 	if select_subtypes:
+		print(ma.pheno[interest_col].unique())
 		ma.pheno=ma.pheno.loc[ma.pheno[interest_col].isin(select_subtypes)]
 		ma.beta=ma.beta.loc[ma.pheno.index]
 		ma_v.pheno=ma_v.pheno.loc[ma_v.pheno[interest_col].isin(select_subtypes)]
 		ma_v.beta=ma_v.beta.loc[ma_v.pheno.index]
+		print(ma.pheno[interest_col].unique())
 
 		if test_methyl_array and predict:
 			ma_t.pheno=ma_t.pheno.loc[ma_t.pheno[interest_col].isin(select_subtypes)]
@@ -112,6 +114,12 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 	if custom_capsule_file2 and os.path.exists(custom_capsule_file2):
 		capsules_dict=torch.load(custom_capsule_file2)
 		final_modules, modulecpgs, module_names=capsules_dict['final_modules'], capsules_dict['modulecpgs'], capsules_dict['module_names']
+		if min_capsule_len>1:
+			include_capsules=[len(x)>min_capsule_len for x in final_modules]
+			final_modules=[final_modules[i] for i in range(len(final_modules)) if include_capsules[i]]
+			module_names=[module_names[i] for i in range(len(module_names)) if include_capsules[i]]
+			modulecpgs=(reduce(np.union1d,final_modules)).tolist()
+
 	else:
 		final_modules, modulecpgs, module_names=build_capsules(capsule_choice,
 																overlap,
@@ -128,6 +136,9 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 																limited_capsule_names_file)
 		if custom_capsule_file2:
 			torch.save(dict(final_modules=final_modules, modulecpgs=modulecpgs, module_names=module_names),custom_capsule_file2)
+
+	if fit_pas:
+		modulecpgs=list(reduce(lambda x,y:x+y,final_modules))
 
 	print(ma.beta.isnull().sum().sum())
 	if not include_last: # ERROR HAPPENS HERE!

@@ -97,7 +97,14 @@ def return_pas_importances_(train_methyl_array,
 	X_train=torch.cat([next(iter(dataloaders['train']))[0] for i in range(2)],dim=0)
 	if torch.cuda.is_available():
 		X_train=X_train.cuda()
-	attributions = torch.sum(torch.cat([torch.abs(gs.attribute(to_cuda(next(iter(dataloaders['val']))[0]), stdevs=0.09, n_samples=20, baselines=X_train,
-									   target=torch.tensor(y_i), return_convergence_delta=False)) for i in range(20) for y_i in y],dim=0),dim=0)
+	attributions=[]
+	#val_loader=iter(dataloaders['val'])
+	for i in range(20):
+		batch=next(iter(dataloaders['val']))
+		X_test=to_cuda(batch[0])
+		y_test=to_cuda(batch[1].flatten())
+		attributions.append(torch.abs(gs.attribute(X_test, stdevs=0.03, n_samples=200, baselines=X_train,
+									   target=y_test, return_convergence_delta=False)))#torch.tensor(y_i)
+	attributions=torch.sum(torch.cat(attributions,dim=0),dim=0)
 	importances=pd.Series(attributions.detach().cpu().numpy(),index=module_names).sort_values(ascending=False)
 	return importances

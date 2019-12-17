@@ -55,14 +55,21 @@ class MethylationDataset(Dataset):
 			binarizer=LabelBinarizer()
 			binarizer.fit(methyl_arr.pheno[outcome_col].astype(str).values)
 		self.y=binarizer.transform(methyl_arr.pheno[outcome_col].astype(str).values)
+		#print(self.y)
+		if len(binarizer.classes_)<3:
+			y_tmp=np.ones((self.y.shape[0],2))
+			for i in range(2):
+				y_tmp[:,i]=(self.y.flatten()==i).astype(int)
+			self.y=y_tmp.astype(int)
 		self.y_orig= np.argmax(self.y,1) # methyl_arr.pheno[outcome_col].values if np.issubdtype(methyl_arr.pheno[original_interest_col].dtype, np.number) else
 		self.y_unique=np.unique(self.y_orig)#np.argmax(self.y,1))
+		#print(self.y_unique)
 		self.binarizer=binarizer
 		if not modules:
 			modules=[list(methyl_arr.beta)]
 		self.modules=modules
 		if run_pas:
-			self.idx=torch.tensor(np.array(list(reduce(lambda x,y:[[i]*len(module) for i,module in enumerate(self.modules)]))),dtype=torch.long)#torch.tensor(reduce(lambda x,y:x+y,self.modules))
+			self.idx=torch.tensor(np.array(list(reduce(lambda x,y:x+y,[[i]*len(module) for i,module in enumerate(self.modules)]))),dtype=torch.long)#torch.tensor(reduce(lambda x,y:x+y,self.modules))
 		else:
 			self.idx=None
 		self.run_pas=run_pas
@@ -283,18 +290,43 @@ class CapsNet(nn.Module):
 		loss = margin_loss + recon_loss
 		return loss, margin_loss, recon_loss
 
+class CancelOut(nn.Module):
+	'''
+	CancelOut Layer
+
+	x - an input data (vector, matrix, tensor)
+	https://github.com/unnir/CancelOut/blob/master/example.ipynb
+	'''
+	def __init__(self,inp, *kargs, **kwargs):
+		super(CancelOut, self).__init__()
+		self.weights = nn.Parameter(torch.zeros(inp,requires_grad = True)+4)
+	def forward(self, x):
+		return (x * torch.sigmoid(self.weights.float()))
+
 class PASModulesLayer(nn.Module):
-	def __init__(self, n_input,n_output):
+	def __init__(self, n_input,n_output,no_bias=True, use_cancel_out=False):
 		super(PASModulesLayer,self).__init__()
-		self.weight=nn.Parameter(torch.zeros(n_input,1))
-		torch.nn.init.xavier_uniform_(self.params)
-		self.bias=nn.Parameter(torch.zeros(n_output,1))
-		self.relu=nn.ReLU()
+		self.weight=nn.Parameter(torch.zeros(1,n_input,requires_grad = True))
+		torch.nn.init.xavier_uniform_(self.weight)
+		self.bias=nn.Parameter(torch.zeros(1,n_output,requires_grad = True))
+		self.nonlinear=nn.Sequential(nn.ReLU(),nn.BatchNorm1d(n_output))
 		self.n_output=n_output
+		self.no_bias=no_bias
+		self.cancel_out=CancelOut(n_output)
+		self.use_cancel_out=use_cancel_out
 
 
 	def forward(self,x,idx):
-		return torch_scatter.scatter_add(x*self.weight.expand_as(x),idx,dim_size=self.n_output)+self.bias
+		batch_size=x.size(0)
+		#print(x.size(),torch.cat([self.weight]*batch_size,dim=0).size(),self.weight.size(),self.bias.size())
+		WX=torch_scatter.scatter_add(x*torch.cat([self.weight]*batch_size,dim=0),idx,dim_size=self.n_output)
+		#print(WX.size())
+		if not self.no_bias:
+			WX=WX+torch.cat([self.bias]*batch_size,dim=0)
+		Z=self.nonlinear(WX)
+		if self.use_cancel_out:
+			Z=self.cancel_out(Z)
+		return Z
 
 
 
@@ -308,7 +340,7 @@ class MethylPASNet(nn.Module):
 			modules=[nn.Sequential(module,nn.ReLU(),nn.BatchNorm1d(module.out_features)) for module in modules]
 			self.pathways=nn.ModuleList(modules)
 		self.pathways=PASModulesLayer(sum(module_lens),len(module_lens))
-		self.output_net=MLP(len(modules), hidden_topology, dropout_p=dropout_p, n_outputs=n_output, binary=False, softmax=True, relu=False)
+		self.output_net=MLP(len(module_lens), hidden_topology, dropout_p=dropout_p, n_outputs=n_output, binary=False, softmax=True, relu=False)
 		self.loss_fn=nn.CrossEntropyLoss()
 
 	def forward(self, x, idx):
@@ -353,6 +385,7 @@ class Trainer:
 		self.PASMode=pas_mode
 		self.l1=l1
 		self.l2=l2
+		self.make_plots=False
 
 	def compute_custom_loss(self,y_pred_caps, y_true, y_true_orig):
 		if self.custom_loss=='none':
