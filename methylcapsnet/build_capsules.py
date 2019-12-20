@@ -105,7 +105,23 @@ def return_caps(capsule,allcpgs,min_capsule_len):
 	else:
 		return []
 
-@pysnooper.snoop('get_caps.log')
+def reduce_caps(capsules,allcpgs,min_capsule_len):
+	cluster = LocalCluster(n_workers=multiprocessing.cpu_count()*2, threads_per_worker=20)
+	client = Client(cluster)
+	capsule_names=list(capsules.keys())
+
+	capsules_bag=db.from_sequence(list(capsules.values()))
+	capsules_intersect=capsules_bag.map(lambda x: np.intersect1d(x,allcpgs))
+	capsules_len=capsules_intersect.map(lambda x: x if len(x) >= min_capsule_len else [])
+	# with get_task_stream(plot='save', filename="task-stream.html") as ts:
+	capsules=capsules_len.compute()
+	#print(capsules)
+	capsules=dict([(capsule_names[i],capsules[i].tolist()) for i in range(len(capsule_names)) if len(capsules[i])])
+	print(capsule_names)
+	client.close()
+	return capsules
+
+#@pysnooper.snoop('get_caps.log')
 def return_custom_capsules(ma=None,capsule_file=selected_caps_file, capsule_sets=['all'], min_capsule_len=2000, include_last=False, limited_capsule_names_file=''):
 	allcpgs=ma.beta.columns.values
 	if limited_capsule_names_file:
@@ -124,8 +140,11 @@ def return_custom_capsules(ma=None,capsule_file=selected_caps_file, capsule_sets
 		else:
 			capsule_list=list(caps_dict[caps_set].keys())
 		for capsule in capsule_list:
-			capsules[capsule]=dask.delayed(lambda x:return_caps(x,allcpgs,min_capsule_len))(caps_dict[caps_set][capsule])
-	capsules=dask.compute(capsules,scheduler='threading')[0]
+			capsules[capsule]=caps_dict[caps_set][capsule]#dask.delayed(lambda x:return_caps(x,allcpgs,min_capsule_len))(caps_dict[caps_set][capsule])
+
+
+	capsules=reduce_caps(capsules,allcpgs,min_capsule_len)
+	#capsules=dask.compute(capsules,scheduler='threading')[0]
 	#capsules={capsule:capsules[capsule] for capsule in capsules if capsules[capsule]}
 	modules = [capsules[capsule] for capsule in capsules if capsules[capsule]]
 	modulecpgs=reduce(np.union1d,modules)#np.array(list(set(list(reduce(lambda x,y:x+y,modules)))))
@@ -215,23 +234,26 @@ def return_gsea_capsules(ma=None,tissue='',context_on=False,use_set=False,gsea_s
 	capsules2=[]
 	#caps_lens=np.array([len(capsules[capsule]) for capsule in capsules])
 
-	cluster = LocalCluster(n_workers=multiprocessing.cpu_count()*2, threads_per_worker=20)
-	client = Client(cluster)
+	# cluster = LocalCluster(n_workers=multiprocessing.cpu_count()*2, threads_per_worker=20)
+	# client = Client(cluster)
 	capsule_names=list(capsules.keys())
 
 	if intersect_context:
 		capsules_tmp_names=np.intersect1d(capsule_names,limited_capsule_names).tolist()
 		if capsules_tmp_names:
 			capsules={k:capsules[k] for k in capsules_tmp_names}
+			capsule_names=capsules_tmp_names
 
-	print(capsule_names)
-	capsules_bag=db.from_sequence(list(capsules.values()))
-	capsules_intersect=capsules_bag.map(lambda x: np.intersect1d(x,allcpgs))
-	capsules_len=capsules_intersect.map(lambda x: x if len(x) >= min_capsule_len else [])
-	# with get_task_stream(plot='save', filename="task-stream.html") as ts:
-	capsules=capsules_len.compute()
-	#print(capsules)
-	capsules=dict([(capsule_names[i],capsules[i].tolist()) for i in range(len(capsule_names)) if len(capsules[i])])
+	capsules=reduce_caps(capsules,allcpgs,min_capsule_len)
+
+	# print(capsule_names)
+	# capsules_bag=db.from_sequence(list(capsules.values()))
+	# capsules_intersect=capsules_bag.map(lambda x: np.intersect1d(x,allcpgs))
+	# capsules_len=capsules_intersect.map(lambda x: x if len(x) >= min_capsule_len else [])
+	# # with get_task_stream(plot='save', filename="task-stream.html") as ts:
+	# capsules=capsules_len.compute()
+	# #print(capsules)
+	# capsules=dict([(capsule_names[i],capsules[i].tolist()) for i in range(len(capsule_names)) if len(capsules[i])])
 
 	# for capsule in capsules:
 	# 	capsules2.append([capsule,dask.delayed(return_caps)(capsules[capsule],allcpgs,min_capsule_len)])
@@ -246,7 +268,7 @@ def return_gsea_capsules(ma=None,tissue='',context_on=False,use_set=False,gsea_s
 	modules = list(capsules.values())#[capsules[capsule] for capsule in capsules if capsules[capsule]]
 	modulecpgs=reduce((np.union1d if union_cpgs else (lambda x,y:x+y)),modules).tolist()
 	module_names=list(capsules.keys())
-	client.close()
+
 	return modules,modulecpgs,module_names
 
 def build_capsules(capsule_choice,
