@@ -385,7 +385,7 @@ class Trainer:
 		self.PASMode=pas_mode
 		self.l1=l1
 		self.l2=l2
-		self.make_plots=False
+		self.construct_plots=False
 
 	def compute_custom_loss(self,y_pred_caps, y_true, y_true_orig):
 		if self.custom_loss=='none':

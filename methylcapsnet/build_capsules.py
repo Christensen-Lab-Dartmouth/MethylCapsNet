@@ -105,6 +105,7 @@ def return_caps(capsule,allcpgs,min_capsule_len):
 	else:
 		return []
 
+@pysnooper.snoop('reduce_caps.log')
 def reduce_caps(capsules,allcpgs,min_capsule_len):
 	cluster = LocalCluster(n_workers=multiprocessing.cpu_count()*2, threads_per_worker=20)
 	client = Client(cluster)
@@ -115,13 +116,13 @@ def reduce_caps(capsules,allcpgs,min_capsule_len):
 	capsules_len=capsules_intersect.map(lambda x: x if len(x) >= min_capsule_len else [])
 	# with get_task_stream(plot='save', filename="task-stream.html") as ts:
 	capsules=capsules_len.compute()
-	#print(capsules)
+	print(capsules)
 	capsules=dict([(capsule_names[i],capsules[i].tolist()) for i in range(len(capsule_names)) if len(capsules[i])])
-	print(capsule_names)
+	#print(list(capsules.keys()))
 	client.close()
 	return capsules
 
-#@pysnooper.snoop('get_caps.log')
+@pysnooper.snoop('get_caps.log')
 def return_custom_capsules(ma=None,capsule_file=selected_caps_file, capsule_sets=['all'], min_capsule_len=2000, include_last=False, limited_capsule_names_file=''):
 	allcpgs=ma.beta.columns.values
 	if limited_capsule_names_file:
@@ -155,7 +156,7 @@ def divide_chunks(l, n):
 	for i in range(0, len(l), len(l)//n):
 		yield l[i:i + n]
 
-#@pysnooper.snoop('gsea_build.log')
+@pysnooper.snoop('gsea_build.log')
 def return_gsea_capsules(ma=None,tissue='',context_on=False,use_set=False,gsea_superset='H',n_top_sets=25,min_capsule_len=2000, all_genes=False, union_cpgs=True, limited_capsule_names_file=''):
 	global gene2cpg, gsea_collections, gene_set_weights
 	if limited_capsule_names_file:
@@ -336,7 +337,7 @@ def build_capsules(capsule_choice,
 			limited_capsule_names=f.read().replace('\n',' ').split()
 		capsules=[]
 		capsule_names=[]
-		for i in range(len()):
+		for i in range(len(module_names)):
 			if module_names[i] in limited_capsule_names:
 				capsule_names.append(module_names[i])
 				capsules.append(final_modules[i])
