@@ -183,6 +183,7 @@ def return_gsea_capsules(ma=None,tissue='',context_on=False,use_set=False,gsea_s
 	intersect_context=False
 	if limited_capsule_names_file:
 		gene_sets_tmp=np.intersect1d(gene_sets,limited_capsule_names).tolist()
+		print('LIMITED GENE CAPS',gene_sets_tmp)
 		if gene_sets_tmp:
 			gene_sets=gene_sets_tmp
 			intersect_context=True

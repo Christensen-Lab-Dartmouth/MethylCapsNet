@@ -299,12 +299,12 @@ class CancelOut(nn.Module):
 	'''
 	def __init__(self,inp, *kargs, **kwargs):
 		super(CancelOut, self).__init__()
-		self.weights = nn.Parameter(torch.zeros(inp,requires_grad = True)+4)
+		self.weight = nn.Parameter(torch.zeros(inp,requires_grad = True)+4)
 	def forward(self, x):
-		return (x * torch.sigmoid(self.weights.float()))
+		return (x * torch.sigmoid(self.weight.float()))
 
 class PASModulesLayer(nn.Module):
-	def __init__(self, n_input,n_output,no_bias=True, use_cancel_out=False):
+	def __init__(self, n_input,n_output,no_bias=True, use_cancel_out=True):
 		super(PASModulesLayer,self).__init__()
 		self.weight=nn.Parameter(torch.zeros(1,n_input,requires_grad = True))
 		torch.nn.init.xavier_uniform_(self.weight)
@@ -356,14 +356,14 @@ class MethylPASNet(nn.Module):
 		return self.loss_fn(y_pred,y_true)
 
 	def get_pathway_weights(self):
-		return self.output_net.mlp[0][0].weight
+		return self.pathways.cancel_out.weight#self.output_net.mlp[0][0].weight
 
 	def calc_elastic_norm_loss(self, l1, l2):
 		weights=self.get_pathway_weights()
-		return l1*torch.norm(weights, p=1)+l2*torch.norm(weights, p=2)
+		return l1*torch.sum(weights)+l2*torch.sum(weights**2)#l1*torch.norm(weights, p=1)+l2*torch.norm(weights, p=2)
 
 	def calc_pathway_importances(self):
-		return torch.sum(self.get_pathway_weights()**2,dim=0).detach().cpu().numpy()
+		return F.sigmoid(self.get_pathway_weights())#torch.sum(self.get_pathway_weights()**2,dim=0).detach().cpu().numpy()
 
 
 class Trainer:
