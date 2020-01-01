@@ -143,10 +143,10 @@ def model_capsnet(train_methyl_array,
 @click.option('-csv', '--feature_csv', default='pasnet_importances.csv', help='All extracted pathway importances.', type=click.Path(exists=False), show_default=True)
 @click.option('-txt', '--capsule_txt', default='custom_capsules.txt', help='Where to extract custom capsules.', type=click.Path(exists=False), show_default=True)
 def extract_capsules(pasnet_model,pasnet_config,n_capsules,feature_csv,capsule_txt):
-	from methylcapsnet.methylcaps_data_models import MethylPASNet
+	from methylcapsnet.methylcaps_data_models import MethylSPWNet
 	pasnet_config=torch.load(pasnet_config)
 	module_names=pasnet_config.pop('module_names')
-	model=MethylPASNet(**pasnet_config)
+	model=MethylSPWNet(**pasnet_config)
 	model.load_state_dict(torch.load(pasnet_model))
 	importances=model.calc_pathway_importances()
 	importances=pd.Series(importances,index=module_names).sort_values(ascending=False)

@@ -190,7 +190,7 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 
 	else:
 		module_lens=[len(x) for x in final_modules]
-		model=MethylPASNet(module_lens, hidden_topology, dropout_p=0.2, n_output=n_out_caps)
+		model=MethylSPWNet(module_lens, hidden_topology, dropout_p=0.2, n_output=n_out_caps)
 		if test_methyl_array and predict:
 			model.load_state_dict(torch.load('pasnet_model.pkl'))
 

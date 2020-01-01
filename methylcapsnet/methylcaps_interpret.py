@@ -60,7 +60,7 @@ def return_pas_importances_(train_methyl_array,
 	pas_config=torch.load(pas_config)
 	pas_config.pop('module_names')
 
-	model=MethylPASNet(**pas_config)
+	model=MethylSPWNet(**pas_config)
 	model.load_state_dict(torch.load(model_state_dict_pkl))
 
 	if torch.cuda.is_available():

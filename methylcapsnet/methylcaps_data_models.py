@@ -28,7 +28,7 @@ np.random.seed(RANDOM_SEED)
 torch.manual_seed(RANDOM_SEED)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
-torch.multiprocessing.set_sharing_strategy('file_system')
+#torch.multiprocessing.set_sharing_strategy('file_system')
 
 class BCEWithNan(object):
 	def __init__ (self, loss_function=nn.BCEWithLogitsLoss(reduce=False)):
@@ -290,6 +290,9 @@ class CapsNet(nn.Module):
 		loss = margin_loss + recon_loss
 		return loss, margin_loss, recon_loss
 
+class MethylCapsNet(CapsNet):
+	pass
+
 class CancelOut(nn.Module):
 	'''
 	CancelOut Layer
@@ -330,9 +333,9 @@ class PASModulesLayer(nn.Module):
 
 
 
-class MethylPASNet(nn.Module):
+class MethylSPWNet(nn.Module):
 	def __init__(self, module_lens, hidden_topology, dropout_p, n_output):
-		super(MethylPASNet,self).__init__()
+		super(MethylSPWNet,self).__init__()
 		if 0:
 			modules=[nn.Linear(module_len,1) for module_len in module_lens]
 			for module in modules:
