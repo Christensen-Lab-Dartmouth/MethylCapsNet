@@ -44,10 +44,39 @@ methylcaps_dir=os.path.dirname(methylcapsnet.__file__)
 annotations450 = os.path.abspath(os.path.join(methylcaps_dir, 'data/450kannotations.bed'))
 hg19 = os.path.abspath(os.path.join(methylcaps_dir, 'data/hg19.genome'))
 selected_caps_file = os.path.abspath(os.path.join(methylcaps_dir, 'data/selected_capsules.p'))
+final_caps_file = os.path.abspath(os.path.join(methylcaps_dir, 'data/final_capsules.p'))
 
 gsea_collections = os.path.abspath(os.path.join(methylcaps_dir, 'data/gsea_collections.symbols.p'))
 gene_set_weights = {os.path.basename(f).split('_')[1]: f for f in glob.glob(os.path.abspath(os.path.join(methylcaps_dir, 'data/SetTestWeights_*.txt')))}
 gene2cpg = os.path.abspath(os.path.join(methylcaps_dir, 'data/gene2cpg.p'))
+
+CAPSULES=['gene',
+			'gene_context',
+			'GSEA_C5.BP',
+			'GSEA_C6',
+			'GSEA_C1',
+			'GSEA_H',
+			'GSEA_C3.MIR',
+			'GSEA_C2.CGP',
+			'GSEA_C4.CM',
+			'GSEA_C5.CC',
+			'GSEA_C3.TFT',
+			'GSEA_C5.MF',
+			'GSEA_C7',
+			'GSEA_C2.CP',
+			'GSEA_C4.CGN',
+			'UCSC_RefGene_Name',
+			'UCSC_RefGene_Accession',
+			'UCSC_RefGene_Group',
+			'UCSC_CpG_Islands_Name',
+			'Relation_to_UCSC_CpG_Island',
+			'Phantom',
+			'DMR',
+			'Enhancer',
+			'HMM_Island',
+			'Regulatory_Feature_Name',
+			'Regulatory_Feature_Group',
+			'DHS']
 
 if 0:
 	print_if_exists(annotations450)
@@ -105,7 +134,7 @@ def return_caps(capsule,allcpgs,min_capsule_len):
 	else:
 		return []
 
-@pysnooper.snoop('reduce_caps.log')
+#@pysnooper.snoop('reduce_caps.log')
 def reduce_caps(capsules,allcpgs,min_capsule_len):
 	cluster = LocalCluster(n_workers=multiprocessing.cpu_count()*2, threads_per_worker=20)
 	client = Client(cluster)
@@ -273,6 +302,47 @@ def return_gsea_capsules(ma=None,tissue='',context_on=False,use_set=False,gsea_s
 
 	return modules,modulecpgs,module_names
 
+def get_gene_sets(cpgs,final_capsules,collection,tissue,n_top_sets):
+	global gsea_collections, gene_set_weights
+	gsea=pickle.load(open(gsea_collections,'rb'))
+	if tissue:
+		gene_sets=pd.read_csv(gene_set_weights[collection],sep='\t',index_col=0)
+		if tissue!='ubiquitous':
+			gene_sets=(gene_sets.quantile(1.,axis=1)-gene_sets.quantile(0.,axis=1)).sort_values().index.tolist()
+		else:
+			gene_sets=gene_sets[tissue].sort_values(ascending=False).index.tolist()
+	else:
+		gene_sets=list(gsea[collection].keys())
+	if n_top_sets:
+		gene_sets=gene_sets[:n_top_sets]
+	final_capsules=final_capsules['GSEA_{}'.format(collection)]
+	final_capsules=final_capsules[final_capsules['cpg'].isin(cpgs)]
+	return final_capsules[final_capsules['feature'].isin(gene_sets)]['cpg'].values
+
+
+def return_final_capsules(methyl_array, capsule_choice, min_capsule_len, collection,tissue, n_top_sets, limited_capsule_names_file):
+	global final_caps_file
+	if limited_capsule_names_file:
+		with open(limited_capsule_names_file) as f:
+			limited_capsule_names=f.read().replace('\n',' ').split()
+	else:
+		limited_capsule_names=[]
+	final_capsules=pickle.load(open(final_caps_file,'rb'))
+	if len(capsule_choice)>1:
+		cpg_arr=pd.concat([final_capsules[caps_choice] for caps_choice in capsule_choice])
+	else:
+		cpg_arr=final_capsules[caps_choice[0]]
+	cpgs=np.intersect1d(methyl_array.columns.values,cpg_arr['cpg'].values)
+	if gsea_superset:
+		cpgs=get_gene_sets(cpgs,final_capsules,gsea_superset,tissue,n_top_sets)
+	if limited_capsule_names:
+		cpgs=np.interssect1d(cpgs,cpg_arr[cpg_arr['feature'].isin(limited_capsule_names)]['cpg'].values)
+	cpg_arr=cpg_arr[cpg_arr['cpg'].isin(cpgs)]
+	capsules=[]
+	for name, dff in pd.DataFrame(cpg_arr.groupby('feature').filter(lambda x: len(x['cpg'])>=min_capsule_len)).groupby('feature'):
+		capsules.append(dff['cpg'].values)
+	return capsules,cpg_arr['cpg'].values,cpg_arr['feature'].unique()
+
 def build_capsules(capsule_choice,
 					overlap,
 					bin_len,
@@ -314,20 +384,25 @@ def build_capsules(capsule_choice,
 		finalcpgs.extend(modulecpgs)
 		capsule_names.extend(module_names)
 
-	selected_sets=np.intersect1d(['UCSC_RefGene_Name','UCSC_RefGene_Accession', 'UCSC_RefGene_Group', 'UCSC_CpG_Islands_Name', 'Relation_to_UCSC_CpG_Island', 'Phantom', 'DMR', 'Enhancer', 'HMM_Island', 'Regulatory_Feature_Name', 'Regulatory_Feature_Group', 'DHS'],capsule_choice).tolist()
-	if selected_sets:
-		final_modules,modulecpgs,module_names=return_custom_capsules(ma=ma,capsule_file=selected_caps_file, capsule_sets=selected_sets, min_capsule_len=min_capsule_len, include_last=include_last, limited_capsule_names_file=limited_capsule_names_file)
-		capsules.extend(final_modules)
-		finalcpgs.extend(modulecpgs)
-		capsule_names.extend(module_names)
+	if np.intersect1d(CAPSULES,capsule_choice).tolist():
+		final_modules,modulecpgs,module_names=return_final_capsules(methyl_array=ma, capsule_choice=capsule_choice, min_capsule_len=min_capsule_len, collection=gsea_superset,tissue=tissue, n_top_sets=n_top_sets, limited_capsule_names_file=limited_capsule_names_file)
 
-	gsea_bool=(("GSEA" in capsule_choice and gsea_superset) or 'all_gene_sets' in capsule_choice)
+	if 0:
 
-	if gsea_bool:
-		final_modules,modulecpgs,module_names=return_gsea_capsules(ma=ma,tissue=tissue,context_on=gene_context,use_set=use_set,gsea_superset=gsea_superset,n_top_sets=number_sets,min_capsule_len=min_capsule_len, all_genes=('all_gene_sets' in capsule_choice), limited_capsule_names_file=limited_capsule_names_file)
-		capsules.extend(final_modules)
-		finalcpgs.extend(modulecpgs)
-		capsule_names.extend(module_names)
+		selected_sets=np.intersect1d(['UCSC_RefGene_Name','UCSC_RefGene_Accession', 'UCSC_RefGene_Group', 'UCSC_CpG_Islands_Name', 'Relation_to_UCSC_CpG_Island', 'Phantom', 'DMR', 'Enhancer', 'HMM_Island', 'Regulatory_Feature_Name', 'Regulatory_Feature_Group', 'DHS'],capsule_choice).tolist()
+		if selected_sets:
+			final_modules,modulecpgs,module_names=return_custom_capsules(ma=ma,capsule_file=selected_caps_file, capsule_sets=selected_sets, min_capsule_len=min_capsule_len, include_last=include_last, limited_capsule_names_file=limited_capsule_names_file)
+			capsules.extend(final_modules)
+			finalcpgs.extend(modulecpgs)
+			capsule_names.extend(module_names)
+
+		gsea_bool=(("GSEA" in capsule_choice and gsea_superset) or 'all_gene_sets' in capsule_choice)
+
+		if gsea_bool:
+			final_modules,modulecpgs,module_names=return_gsea_capsules(ma=ma,tissue=tissue,context_on=gene_context,use_set=use_set,gsea_superset=gsea_superset,n_top_sets=number_sets,min_capsule_len=min_capsule_len, all_genes=('all_gene_sets' in capsule_choice), limited_capsule_names_file=limited_capsule_names_file)
+			capsules.extend(final_modules)
+			finalcpgs.extend(modulecpgs)
+			capsule_names.extend(module_names)
 
 	final_modules=capsules
 	modulecpgs=list(set(finalcpgs))
