@@ -1,3 +1,31 @@
 # Auto detect text files and perform LF normalization
 * text=auto
 methylcapsnet/data/final_capsules.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules*.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__GSEA_C2.CP.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__GSEA_C4.CGN.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__GSEA_C5.MF.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__Regulatory_Feature_Name.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__UCSC_CpG_Islands_Name.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__Enhancer.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__GSEA_C2.CGP.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__HMM_Island.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__Phantom.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__GSEA_C5.CC.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__GSEA_H.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__UCSC_RefGene_Group.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__GSEA_C3.MIR.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__GSEA_C4.CM.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__Regulatory_Feature_Group.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__GSEA_C1.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__GSEA_C7.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__Relation_to_UCSC_CpG_Island.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__UCSC_RefGene_Accession.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__gene_context.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__GSEA_C3.TFT.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__GSEA_C5.BP.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__gene.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__DHS.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__DMR.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__GSEA_C6.p filter=lfs diff=lfs merge=lfs -text
+methylcapsnet/data/final_capsules__UCSC_RefGene_Name.p filter=lfs diff=lfs merge=lfs -text

@@ -44,7 +44,6 @@ methylcaps_dir=os.path.dirname(methylcapsnet.__file__)
 annotations450 = os.path.abspath(os.path.join(methylcaps_dir, 'data/450kannotations.bed'))
 hg19 = os.path.abspath(os.path.join(methylcaps_dir, 'data/hg19.genome'))
 selected_caps_file = os.path.abspath(os.path.join(methylcaps_dir, 'data/selected_capsules.p'))
-final_caps_file = os.path.abspath(os.path.join(methylcaps_dir, 'data/final_capsules.p'))
 
 gsea_collections = os.path.abspath(os.path.join(methylcaps_dir, 'data/gsea_collections.symbols.p'))
 gene_set_weights = {os.path.basename(f).split('_')[1]: f for f in glob.glob(os.path.abspath(os.path.join(methylcaps_dir, 'data/SetTestWeights_*.txt')))}
@@ -77,6 +76,9 @@ CAPSULES=['gene',
 			'Regulatory_Feature_Name',
 			'Regulatory_Feature_Group',
 			'DHS']
+
+final_caps_files = {k: os.path.abspath(os.path.join(methylcaps_dir, 'data/final_capsules__{}.p'.format(k))) for k in CAPSULES }
+
 
 if 0:
 	print_if_exists(annotations450)
@@ -321,22 +323,22 @@ def get_gene_sets(cpgs,final_capsules,collection,tissue,n_top_sets):
 
 
 def return_final_capsules(methyl_array, capsule_choice, min_capsule_len, collection,tissue, n_top_sets, limited_capsule_names_file):
-	global final_caps_file
+	global final_caps_files
 	if limited_capsule_names_file:
 		with open(limited_capsule_names_file) as f:
 			limited_capsule_names=f.read().replace('\n',' ').split()
 	else:
 		limited_capsule_names=[]
-	final_capsules=pickle.load(open(final_caps_file,'rb'))
+	#final_capsules=pickle.load(open(final_caps_files[capsule_choice],'rb'))
 	if len(capsule_choice)>1:
-		cpg_arr=pd.concat([final_capsules[caps_choice] for caps_choice in capsule_choice])
+		cpg_arr=pd.concat([pd.read_pickle(final_caps_files[caps_choice]) for caps_choice in capsule_choice])
 	else:
-		cpg_arr=final_capsules[caps_choice[0]]
+		cpg_arr=pd.read_pickle(final_caps_files[caps_choice[0]])
 	cpgs=np.intersect1d(methyl_array.columns.values,cpg_arr['cpg'].values)
 	if gsea_superset:
-		cpgs=get_gene_sets(cpgs,final_capsules,gsea_superset,tissue,n_top_sets)
+		cpgs=get_gene_sets(cpgs,cpg_arr,gsea_superset,tissue,n_top_sets)
 	if limited_capsule_names:
-		cpgs=np.interssect1d(cpgs,cpg_arr[cpg_arr['feature'].isin(limited_capsule_names)]['cpg'].values)
+		cpgs=np.intersect1d(cpgs,cpg_arr[cpg_arr['feature'].isin(limited_capsule_names)]['cpg'].values)
 	cpg_arr=cpg_arr[cpg_arr['cpg'].isin(cpgs)]
 	capsules=[]
 	for name, dff in pd.DataFrame(cpg_arr.groupby('feature').filter(lambda x: len(x['cpg'])>=min_capsule_len)).groupby('feature'):
