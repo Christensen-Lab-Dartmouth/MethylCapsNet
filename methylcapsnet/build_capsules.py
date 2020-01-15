@@ -321,8 +321,8 @@ def get_gene_sets(cpgs,final_capsules,collection,tissue,n_top_sets):
 	final_capsules=final_capsules[final_capsules['cpg'].isin(cpgs)]
 	return final_capsules[final_capsules['feature'].isin(gene_sets)]['cpg'].values
 
-
-def return_final_capsules(methyl_array, capsule_choice, min_capsule_len, collection,tissue, n_top_sets, limited_capsule_names_file):
+@pysnooper.snoop('final_caps.log')
+def return_final_capsules(methyl_array, capsule_choice, min_capsule_len, collection,tissue, n_top_sets, limited_capsule_names_file, gsea_superset):
 	global final_caps_files
 	if limited_capsule_names_file:
 		with open(limited_capsule_names_file) as f:
@@ -333,8 +333,8 @@ def return_final_capsules(methyl_array, capsule_choice, min_capsule_len, collect
 	if len(capsule_choice)>1:
 		cpg_arr=pd.concat([pd.read_pickle(final_caps_files[caps_choice]) for caps_choice in capsule_choice])
 	else:
-		cpg_arr=pd.read_pickle(final_caps_files[caps_choice[0]])
-	cpgs=np.intersect1d(methyl_array.columns.values,cpg_arr['cpg'].values)
+		cpg_arr=pd.read_pickle(final_caps_files[capsule_choice[0]])
+	cpgs=np.intersect1d(methyl_array.beta.columns.values,cpg_arr['cpg'].values)
 	if gsea_superset:
 		cpgs=get_gene_sets(cpgs,cpg_arr,gsea_superset,tissue,n_top_sets)
 	if limited_capsule_names:
@@ -387,43 +387,46 @@ def build_capsules(capsule_choice,
 		capsule_names.extend(module_names)
 
 	if np.intersect1d(CAPSULES,capsule_choice).tolist():
-		final_modules,modulecpgs,module_names=return_final_capsules(methyl_array=ma, capsule_choice=capsule_choice, min_capsule_len=min_capsule_len, collection=gsea_superset,tissue=tissue, n_top_sets=n_top_sets, limited_capsule_names_file=limited_capsule_names_file)
+		final_modules,modulecpgs,module_names=return_final_capsules(methyl_array=ma, capsule_choice=capsule_choice, min_capsule_len=min_capsule_len, collection=gsea_superset,tissue=tissue, n_top_sets=number_sets, limited_capsule_names_file=limited_capsule_names_file, gsea_superset=gsea_superset)
+		capsules.extend(final_modules)
+		finalcpgs.extend(modulecpgs)
+		capsule_names.extend(module_names)
 
-	if 0:
-
-		selected_sets=np.intersect1d(['UCSC_RefGene_Name','UCSC_RefGene_Accession', 'UCSC_RefGene_Group', 'UCSC_CpG_Islands_Name', 'Relation_to_UCSC_CpG_Island', 'Phantom', 'DMR', 'Enhancer', 'HMM_Island', 'Regulatory_Feature_Name', 'Regulatory_Feature_Group', 'DHS'],capsule_choice).tolist()
-		if selected_sets:
-			final_modules,modulecpgs,module_names=return_custom_capsules(ma=ma,capsule_file=selected_caps_file, capsule_sets=selected_sets, min_capsule_len=min_capsule_len, include_last=include_last, limited_capsule_names_file=limited_capsule_names_file)
-			capsules.extend(final_modules)
-			finalcpgs.extend(modulecpgs)
-			capsule_names.extend(module_names)
-
-		gsea_bool=(("GSEA" in capsule_choice and gsea_superset) or 'all_gene_sets' in capsule_choice)
-
-		if gsea_bool:
-			final_modules,modulecpgs,module_names=return_gsea_capsules(ma=ma,tissue=tissue,context_on=gene_context,use_set=use_set,gsea_superset=gsea_superset,n_top_sets=number_sets,min_capsule_len=min_capsule_len, all_genes=('all_gene_sets' in capsule_choice), limited_capsule_names_file=limited_capsule_names_file)
-			capsules.extend(final_modules)
-			finalcpgs.extend(modulecpgs)
-			capsule_names.extend(module_names)
+	# if 0:
+	#
+	# 	selected_sets=np.intersect1d(['UCSC_RefGene_Name','UCSC_RefGene_Accession', 'UCSC_RefGene_Group', 'UCSC_CpG_Islands_Name', 'Relation_to_UCSC_CpG_Island', 'Phantom', 'DMR', 'Enhancer', 'HMM_Island', 'Regulatory_Feature_Name', 'Regulatory_Feature_Group', 'DHS'],capsule_choice).tolist()
+	# 	if selected_sets:
+	# 		final_modules,modulecpgs,module_names=return_custom_capsules(ma=ma,capsule_file=selected_caps_file, capsule_sets=selected_sets, min_capsule_len=min_capsule_len, include_last=include_last, limited_capsule_names_file=limited_capsule_names_file)
+	# 		capsules.extend(final_modules)
+	# 		finalcpgs.extend(modulecpgs)
+	# 		capsule_names.extend(module_names)
+	#
+	# 	gsea_bool=(("GSEA" in capsule_choice and gsea_superset) or 'all_gene_sets' in capsule_choice)
+	#
+	# 	if gsea_bool:
+	# 		final_modules,modulecpgs,module_names=return_gsea_capsules(ma=ma,tissue=tissue,context_on=gene_context,use_set=use_set,gsea_superset=gsea_superset,n_top_sets=number_sets,min_capsule_len=min_capsule_len, all_genes=('all_gene_sets' in capsule_choice), limited_capsule_names_file=limited_capsule_names_file)
+	# 		capsules.extend(final_modules)
+	# 		finalcpgs.extend(modulecpgs)
+	# 		capsule_names.extend(module_names)
 
 	final_modules=capsules
-	modulecpgs=list(set(finalcpgs))
+	modulecpgs=finalcpgs#list(set(finalcpgs))
 	module_names=capsule_names
 
-	if limited_capsule_names_file and not (selected_sets or gsea_bool):
-		with open(limited_capsule_names_file) as f:
-			limited_capsule_names=f.read().replace('\n',' ').split()
-		capsules=[]
-		capsule_names=[]
-		for i in range(len(module_names)):
-			if module_names[i] in limited_capsule_names:
-				capsule_names.append(module_names[i])
-				capsules.append(final_modules[i])
+	# if limited_capsule_names_file and not (selected_sets or gsea_bool):
+	# 	with open(limited_capsule_names_file) as f:
+	# 		limited_capsule_names=f.read().replace('\n',' ').split()
+	# 	capsules=[]
+	# 	capsule_names=[]
+	# 	for i in range(len(module_names)):
+	# 		if module_names[i] in limited_capsule_names:
+	# 			capsule_names.append(module_names[i])
+	# 			capsules.append(final_modules[i])
+	#
+	# 	modulecpgs=list(set(list(reduce(lambda x,y: x+y,capsules))))
+	# 	final_modules=capsules
+	# 	module_names=capsule_names
 
-		modulecpgs=list(set(list(reduce(lambda x,y: x+y,capsules))))
-		final_modules=capsules
-		module_names=capsule_names
-
-	print(len(final_modules),len(modulecpgs),len(module_names),ma.beta.isnull().sum().sum())
+	print("{} modules, {} cpgs, {} module names, {} missing".format(len(final_modules),len(modulecpgs),len(module_names),ma.beta.isnull().sum().sum()))
 
 	return final_modules, modulecpgs, module_names
