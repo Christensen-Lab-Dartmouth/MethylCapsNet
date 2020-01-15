@@ -178,6 +178,7 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 	n_out_caps=len(datasets['train'].y_unique)
 
 	if not fit_pas:
+		print("Not fitting MethylSPWNet")
 		primary_caps = PrimaryCaps(modules=final_modules,hidden_topology=hidden_topology,n_output=primary_caps_out_len)
 		hidden_caps = []
 		output_caps = CapsLayer(n_out_caps,n_primary,primary_caps_out_len,caps_out_len,routing_iterations=routing_iterations)
@@ -189,6 +190,7 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 
 
 	else:
+		print("Fitting MethylSPWNet")
 		module_lens=[len(x) for x in final_modules]
 		model=MethylSPWNet(module_lens, hidden_topology, dropout_p=0.2, n_output=n_out_caps)
 		if test_methyl_array and predict:

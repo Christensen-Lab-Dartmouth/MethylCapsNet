@@ -338,13 +338,21 @@ def return_final_capsules(methyl_array, capsule_choice, min_capsule_len, collect
 	if gsea_superset:
 		cpgs=get_gene_sets(cpgs,cpg_arr,gsea_superset,tissue,n_top_sets)
 	if limited_capsule_names:
+		print(limited_capsule_names)
 		cpgs=np.intersect1d(cpgs,cpg_arr[cpg_arr['feature'].isin(limited_capsule_names)]['cpg'].values)
 	cpg_arr=cpg_arr[cpg_arr['cpg'].isin(cpgs)]
 	capsules=[]
+	cpgs=[]
+	features=[]
 	for name, dff in pd.DataFrame(cpg_arr.groupby('feature').filter(lambda x: len(x['cpg'])>=min_capsule_len)).groupby('feature'):
-		capsules.append(dff['cpg'].values)
-	return capsules,cpg_arr['cpg'].values,cpg_arr['feature'].unique()
+		cpg=dff['cpg'].values
+		capsules.append(cpg)
+		cpgs.extend(cpg.tolist())
+		features.append(name)
+	cpgs,features=np.array(cpgs),np.array(features)
+	return capsules,cpgs,features#cpg_arr['feature'].unique()#cpg_arr['cpg'].values
 
+@pysnooper.snoop('build_caps.log')
 def build_capsules(capsule_choice,
 					overlap,
 					bin_len,
@@ -410,7 +418,7 @@ def build_capsules(capsule_choice,
 	# 		capsule_names.extend(module_names)
 
 	final_modules=capsules
-	modulecpgs=finalcpgs#list(set(finalcpgs))
+	modulecpgs=list(set(finalcpgs))
 	module_names=capsule_names
 
 	# if limited_capsule_names_file and not (selected_sets or gsea_bool):
