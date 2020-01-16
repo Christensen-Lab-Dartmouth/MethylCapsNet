@@ -68,7 +68,8 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 					select_subtypes=[],
 					fit_pas=False,
 					l1_l2='',
-					custom_capsule_file2=''):
+					custom_capsule_file2='',
+					min_capsules=5):
 
 	capsule_choice=list(capsule_choice)
 	#custom_capsule_file=list(custom_capsule_file)
@@ -136,6 +137,8 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 																limited_capsule_names_file)
 		if custom_capsule_file2:
 			torch.save(dict(final_modules=final_modules, modulecpgs=modulecpgs, module_names=module_names),custom_capsule_file2)
+
+	assert len(final_modules) >= min_capsules , "Below the number of allowed capsules."
 
 	if fit_pas:
 		modulecpgs=list(reduce(lambda x,y:x+y,final_modules))

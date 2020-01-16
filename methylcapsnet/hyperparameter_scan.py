@@ -128,6 +128,7 @@ def return_val_loss(command, torque, total_time, delay_time, job, gpu, additiona
 @click.option('-gc', '--gene_context', is_flag=True, help='Use upstream and gene body contexts for gsea analysis.', show_default=True)
 @click.option('-ss', '--select_subtypes', default=[''], multiple=True, help='Selected subtypes if looking to reduce number of labels to predict', show_default=True)
 @click.option('-hyp', '--custom_hyperparameters', default='hyperparameters.yaml', help='Custom hyperparameter yaml file, bed or pickle.', show_default=True, type=click.Path(exists=False))
+@click.option('-mc', '--min_capsules', default=5, help='Minimum number of capsules in analysis.', show_default=True)
 def hyperparameter_scan(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -159,7 +160,8 @@ def hyperparameter_scan(train_methyl_array,
 						use_set,
 						gene_context,
 						select_subtypes,
-						custom_hyperparameters):
+						custom_hyperparameters,
+						min_capsules):
 
 	np.random.seed(random_seed)
 
@@ -178,7 +180,8 @@ def hyperparameter_scan(train_methyl_array,
 							n_epochs=n_epochs,
 							min_capsule_len_low_bound=min_capsule_len_low_bound,
 							number_sets=number_sets,
-							custom_hyperparameters=custom_hyperparameters)
+							custom_hyperparameters=custom_hyperparameters,
+							min_capsules=min_capsules)
 	if torque and not update:
 		opts['torque']=''
 	if use_set:

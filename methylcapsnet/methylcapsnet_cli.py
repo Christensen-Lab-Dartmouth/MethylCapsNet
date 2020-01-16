@@ -68,6 +68,7 @@ def methylcaps():
 @click.option('-fp', '--fit_pas', is_flag=True, help='Fit PASNet for feature selection.', show_default=True)
 @click.option('-l1l2', '--l1_l2', default='', help='L1, L2 penalization, comma delimited.', type=click.Path(exists=False), show_default=True)
 @click.option('-cf2', '--custom_capsule_file2', default='', help='If specified as pkl, saves and loads current capsule configuration for quick use.', show_default=True, type=click.Path(exists=False))
+@click.option('-mc', '--min_capsules', default=5, help='Minimum number of capsules in analysis.', show_default=True)
 def model_capsnet(train_methyl_array,
 					val_methyl_array,
 					interest_col,
@@ -100,7 +101,8 @@ def model_capsnet(train_methyl_array,
 					select_subtypes,
 					fit_pas,
 					l1_l2,
-					custom_capsule_file2):
+					custom_capsule_file2,
+					min_capsules):
 
 	model_capsnet_(train_methyl_array,
 						val_methyl_array,
@@ -134,7 +136,8 @@ def model_capsnet(train_methyl_array,
 						list(filter(None,select_subtypes)),
 						fit_pas,
 						l1_l2,
-						custom_capsule_file2)
+						custom_capsule_file2,
+						min_capsules)
 
 @methylcaps.command()
 @click.option('-pm', '--pasnet_model', default='pasnet_model.pkl', help='Path to PASNet model to extract pathway importances.', type=click.Path(exists=False), show_default=True)

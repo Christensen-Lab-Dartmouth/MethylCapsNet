@@ -124,7 +124,8 @@ def hyperparameter_job_(train_methyl_array,
 						use_set,
 						gene_context,
 						select_subtypes,
-						custom_hyperparameters):
+						custom_hyperparameters,
+						min_capsules):
 
 	additional_params=dict(train_methyl_array=train_methyl_array,
 							val_methyl_array=val_methyl_array,
@@ -134,6 +135,7 @@ def hyperparameter_job_(train_methyl_array,
 							job=job,
 							batch_size=batch_size,
 							number_sets=number_sets,
+							min_capsules=min_capsules
 							)
 
 	if n_epochs:
@@ -362,6 +364,7 @@ def hyperparameter_job_(train_methyl_array,
 @click.option('-gc', '--gene_context', is_flag=True, help='Use upstream and gene body contexts for gsea analysis.', show_default=True)
 @click.option('-ss', '--select_subtypes', default=[''], multiple=True, help='Selected subtypes if looking to reduce number of labels to predict', show_default=True)
 @click.option('-hyp', '--custom_hyperparameters', default='hyperparameters.yaml', help='Custom hyperparameter yaml file, bed or pickle.', show_default=True, type=click.Path(exists=False))
+@click.option('-mc', '--min_capsules', default=5, help='Minimum number of capsules in analysis.', show_default=True)
 def hyperparameter_job(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -393,7 +396,8 @@ def hyperparameter_job(train_methyl_array,
 						use_set,
 						gene_context,
 						select_subtypes,
-						custom_hyperparameters):
+						custom_hyperparameters,
+						min_capsules):
 
 	hyperparameter_job_(train_methyl_array,
 							val_methyl_array,
@@ -426,7 +430,8 @@ def hyperparameter_job(train_methyl_array,
 							use_set,
 							gene_context,
 							select_subtypes,
-							custom_hyperparameters)
+							custom_hyperparameters,
+							min_capsules)
 
 
 
