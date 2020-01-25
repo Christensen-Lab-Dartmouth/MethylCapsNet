@@ -141,15 +141,13 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 	assert len(final_modules) >= min_capsules , "Below the number of allowed capsules."
 
 	if fit_pas:
-		modulecpgs=list(reduce(lambda x,y:x+y,final_modules))
+		modulecpgs=list(reduce(lambda x,y:np.hstack((x,y)),final_modules))
 
-	print(ma.beta.isnull().sum().sum())
 	if not include_last: # ERROR HAPPENS HERE!
 		ma.beta=ma.beta.loc[:,modulecpgs]
 		ma_v.beta=ma_v.beta.loc[:,modulecpgs]
 		if test_methyl_array and predict:
 			ma_t.beta=ma_t.beta.loc[:,modulecpgs]
-	print(ma.beta.isnull().sum().sum())
 	# https://github.com/higgsfield/Capsule-Network-Tutorial/blob/master/Capsule%20Network.ipynb
 	original_interest_col=interest_col
 	if n_bins:

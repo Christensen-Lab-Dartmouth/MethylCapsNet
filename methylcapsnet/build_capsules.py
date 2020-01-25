@@ -323,6 +323,7 @@ def get_gene_sets(cpgs,final_capsules,collection,tissue,n_top_sets):
 
 @pysnooper.snoop('final_caps.log')
 def return_final_capsules(methyl_array, capsule_choice, min_capsule_len, collection,tissue, n_top_sets, limited_capsule_names_file, gsea_superset):
+	from sklearn.preprocessing import LabelEncoder
 	global final_caps_files
 	if limited_capsule_names_file:
 		with open(limited_capsule_names_file) as f:
@@ -339,17 +340,21 @@ def return_final_capsules(methyl_array, capsule_choice, min_capsule_len, collect
 		cpgs=get_gene_sets(cpgs,cpg_arr,gsea_superset,tissue,n_top_sets)
 	if limited_capsule_names:
 		print(limited_capsule_names)
-		cpgs=np.intersect1d(cpgs,cpg_arr[cpg_arr['feature'].isin(limited_capsule_names)]['cpg'].values)
+		cpg_arr=cpg_arr[cpg_arr['feature'].isin(limited_capsule_names)]#cpgs=np.intersect1d(cpgs,cpg_arr[cpg_arr['feature'].isin(limited_capsule_names)]['cpg'].values)
 	cpg_arr=cpg_arr[cpg_arr['cpg'].isin(cpgs)]
 	capsules=[]
 	cpgs=[]
 	features=[]
-	for name, dff in pd.DataFrame(cpg_arr.groupby('feature').filter(lambda x: len(x['cpg'])>=min_capsule_len)).groupby('feature'):
-		cpg=dff['cpg'].values
-		capsules.append(cpg)
-		cpgs.extend(cpg.tolist())
-		features.append(name)
-	cpgs,features=np.array(cpgs),np.array(features)
+	cpg_arr=pd.DataFrame(cpg_arr.groupby('feature').filter(lambda x: len(x['cpg'])>=min_capsule_len))
+	# for name, dff in .groupby('feature'):
+	# 	cpg=dff['cpg'].values
+	# 	capsules.append(cpg)
+	# 	cpgs.extend(cpg.tolist())
+	# 	features.append(name)
+	cpgs,features=cpg_arr['cpg'].values,cpg_arr['feature'].unique()
+	split_idx=np.cumsum(np.bincount(LabelEncoder().fit_transform(cpg_arr['feature'].values).flatten().astype(int)).flatten().astype(int)).flatten().astype(int)[:-1]
+	capsules=np.split(cpgs,split_idx)
+	print(capsules)
 	return capsules,cpgs,features#cpg_arr['feature'].unique()#cpg_arr['cpg'].values
 
 @pysnooper.snoop('build_caps.log')
