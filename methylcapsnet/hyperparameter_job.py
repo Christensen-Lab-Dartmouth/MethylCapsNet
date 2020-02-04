@@ -125,7 +125,9 @@ def hyperparameter_job_(train_methyl_array,
 						gene_context,
 						select_subtypes,
 						custom_hyperparameters,
-						min_capsules):
+						min_capsules,
+						fit_spw,
+						l1_l2):
 
 	additional_params=dict(train_methyl_array=train_methyl_array,
 							val_methyl_array=val_methyl_array,
@@ -143,6 +145,10 @@ def hyperparameter_job_(train_methyl_array,
 
 	if gsea_superset:
 		additional_params['gsea_superset']=gsea_superset
+
+	if l1_l2:
+		additional_params['l1_l2']=l1_l2
+
 	if tissue:
 		additional_params['tissue']=tissue
 
@@ -164,6 +170,8 @@ def hyperparameter_job_(train_methyl_array,
 			additional_params['use_set']=use_set
 		if gene_context:
 			additional_params['gene_context']=gene_context
+		if fit_spw:
+			additional_params['fit_spw']=fit_spw
 	else:
 		select_subtypes=list(filter(None,select_subtypes))
 		if select_subtypes:
@@ -173,6 +181,8 @@ def hyperparameter_job_(train_methyl_array,
 			additional_params['use_set']=''
 		if gene_context:
 			additional_params['gene_context']=''
+		if fit_spw:
+			additional_params['fit_spw']=''
 
 	if not survival:
 		additional_params['gamma2']=1e-2
@@ -365,6 +375,8 @@ def hyperparameter_job_(train_methyl_array,
 @click.option('-ss', '--select_subtypes', default=[''], multiple=True, help='Selected subtypes if looking to reduce number of labels to predict', show_default=True)
 @click.option('-hyp', '--custom_hyperparameters', default='hyperparameters.yaml', help='Custom hyperparameter yaml file, bed or pickle.', show_default=True, type=click.Path(exists=False))
 @click.option('-mc', '--min_capsules', default=5, help='Minimum number of capsules in analysis.', show_default=True)
+@click.option('-fp', '--fit_spw', is_flag=True, help='Fit SPWNet for feature selection.', show_default=True)
+@click.option('-l1l2', '--l1_l2', default='', help='L1, L2 penalization, comma delimited.', type=click.Path(exists=False), show_default=True)
 def hyperparameter_job(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -397,7 +409,9 @@ def hyperparameter_job(train_methyl_array,
 						gene_context,
 						select_subtypes,
 						custom_hyperparameters,
-						min_capsules):
+						min_capsules,
+						fit_spw,
+						l1_l2):
 
 	hyperparameter_job_(train_methyl_array,
 							val_methyl_array,
@@ -431,7 +445,9 @@ def hyperparameter_job(train_methyl_array,
 							gene_context,
 							select_subtypes,
 							custom_hyperparameters,
-							min_capsules)
+							min_capsules,
+							fit_spw,
+							l1_l2)
 
 
 

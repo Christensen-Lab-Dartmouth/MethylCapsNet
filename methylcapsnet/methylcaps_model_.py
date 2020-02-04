@@ -66,7 +66,7 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 					use_set=False,
 					gene_context=False,
 					select_subtypes=[],
-					fit_pas=False,
+					fit_spw=False,
 					l1_l2='',
 					custom_capsule_file2='',
 					min_capsules=5):
@@ -140,7 +140,7 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 
 	assert len(final_modules) >= min_capsules , "Below the number of allowed capsules."
 
-	if fit_pas:
+	if fit_spw:
 		modulecpgs=list(reduce(lambda x,y:np.hstack((x,y)),final_modules))
 
 	if not include_last: # ERROR HAPPENS HERE!
@@ -160,11 +160,11 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 
 	datasets=dict()
 
-	datasets['train']=MethylationDataset(ma,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col, run_pas=fit_pas)
+	datasets['train']=MethylationDataset(ma,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col, run_spw=fit_spw)
 	print(datasets['train'].X.isnull().sum().sum())
-	datasets['val']=MethylationDataset(ma_v,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col, run_pas=fit_pas)
+	datasets['val']=MethylationDataset(ma_v,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col, run_spw=fit_spw)
 	if test_methyl_array and predict:
-		datasets['test']=MethylationDataset(ma_t,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col, run_pas=fit_pas)
+		datasets['test']=MethylationDataset(ma_t,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col, run_spw=fit_spw)
 
 	dataloaders=dict()
 
@@ -178,7 +178,7 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 
 	n_out_caps=len(datasets['train'].y_unique)
 
-	if not fit_pas:
+	if not fit_spw:
 		print("Not fitting MethylSPWNet")
 		primary_caps = PrimaryCaps(modules=final_modules,hidden_topology=hidden_topology,n_output=primary_caps_out_len)
 		hidden_caps = []
@@ -195,7 +195,7 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 		module_lens=[len(x) for x in final_modules]
 		model=MethylSPWNet(module_lens, hidden_topology, dropout_p=0.2, n_output=n_out_caps)
 		if test_methyl_array and predict:
-			model.load_state_dict(torch.load('pasnet_model.pkl'))
+			model.load_state_dict(torch.load('spwnet_model.pkl'))
 
 	if torch.cuda.is_available():
 		model=model.cuda()
@@ -203,9 +203,9 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 
 	# extract all c_ij for all layers across all batches, or just last batch
 
-	if l1_l2 and fit_pas:
+	if l1_l2 and fit_spw:
 		l1,l2=list(map(float,l1_l2.split(',')))
-	elif fit_pas:
+	elif fit_spw:
 		l1,l2=0.,0.
 
 	trainer=Trainer(model=model,
@@ -215,19 +215,19 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 					n_primary=n_primary,
 					custom_loss=custom_loss,
 					gamma2=gamma2,
-					pas_mode=fit_pas,
-					l1=l1 if fit_pas else 0.,
-					l2=l2 if fit_pas else 0.)
+					spw_mode=fit_spw,
+					l1=l1 if fit_spw else 0.,
+					l2=l2 if fit_spw else 0.)
 
 	if not predict:
 		try:
 			#assert 1==2
 			trainer.fit(dataloader=dataloaders['train'])
 			val_loss=min(trainer.val_losses)
-			torch.save(trainer.model.state_dict(),'capsnet_model.pkl' if not fit_pas else 'pasnet_model.pkl')
-			if fit_pas:
-				torch.save(dict(final_modules=final_modules, modulecpgs=modulecpgs, module_names=module_names), 'pasnet_capsules.pkl')
-				torch.save(dict(module_names=module_names,module_lens=module_lens,dropout_p=0.2,hidden_topology=hidden_topology,n_output=n_out_caps),'pasnet_config.pkl')
+			torch.save(trainer.model.state_dict(),'capsnet_model.pkl' if not fit_spw else 'spwnet_model.pkl')
+			if fit_spw:
+				torch.save(dict(final_modules=final_modules, modulecpgs=modulecpgs, module_names=module_names), 'spwnet_capsules.pkl')
+				torch.save(dict(module_names=module_names,module_lens=module_lens,dropout_p=0.2,hidden_topology=hidden_topology,n_output=n_out_caps),'spwnet_config.pkl')
 		except Exception as e:
 			print(e)
 			val_loss=-2

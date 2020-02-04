@@ -129,6 +129,8 @@ def return_val_loss(command, torque, total_time, delay_time, job, gpu, additiona
 @click.option('-ss', '--select_subtypes', default=[''], multiple=True, help='Selected subtypes if looking to reduce number of labels to predict', show_default=True)
 @click.option('-hyp', '--custom_hyperparameters', default='hyperparameters.yaml', help='Custom hyperparameter yaml file, bed or pickle.', show_default=True, type=click.Path(exists=False))
 @click.option('-mc', '--min_capsules', default=5, help='Minimum number of capsules in analysis.', show_default=True)
+@click.option('-fp', '--fit_spw', is_flag=True, help='Fit SPWNet for feature selection.', show_default=True)
+@click.option('-l1l2', '--l1_l2', default='', help='L1, L2 penalization, comma delimited.', type=click.Path(exists=False), show_default=True)
 def hyperparameter_scan(train_methyl_array,
 						val_methyl_array,
 						interest_col,
@@ -161,7 +163,9 @@ def hyperparameter_scan(train_methyl_array,
 						gene_context,
 						select_subtypes,
 						custom_hyperparameters,
-						min_capsules):
+						min_capsules,
+						fit_spw,
+						l1_l2):
 
 	np.random.seed(random_seed)
 
@@ -188,6 +192,10 @@ def hyperparameter_scan(train_methyl_array,
 		opts['use_set']=''
 	if gene_context:
 		opts['gene_context']=''
+	if fit_spw:
+		opts['fit_spw']=''
+	if l1_l2:
+		opts['l1_l2']=l1_l2
 	if gsea_superset:
 		opts['gsea_superset']=gsea_superset
 	if tissue:

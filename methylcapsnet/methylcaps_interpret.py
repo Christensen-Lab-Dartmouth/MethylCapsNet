@@ -6,14 +6,14 @@ import torch
 from torch.utils.data import DataLoader, Dataset, TensorDataset
 from methylcapsnet.methylcaps_data_models import *
 
-def return_pas_importances_(train_methyl_array,
+def return_spw_importances_(train_methyl_array,
 							val_methyl_array,
 							interest_col,
 							select_subtypes,
 							capsules_pickle,
 							include_last,
 							n_bins,
-							pas_config,
+							spw_config,
 							model_state_dict_pkl,
 							batch_size
 							):
@@ -49,18 +49,18 @@ def return_pas_importances_(train_methyl_array,
 		interest_col=new_interest_col
 
 	datasets=dict()
-	datasets['train']=MethylationDataset(ma,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col, run_pas=True)
-	datasets['val']=MethylationDataset(ma_v,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col, run_pas=True)
+	datasets['train']=MethylationDataset(ma,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col, run_spw=True)
+	datasets['val']=MethylationDataset(ma_v,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col, run_spw=True)
 
 	dataloaders=dict()
 	dataloaders['train']=DataLoader(datasets['train'],batch_size=batch_size,shuffle=True,num_workers=8, pin_memory=True, drop_last=True)
 	dataloaders['val']=DataLoader(datasets['val'],batch_size=batch_size,shuffle=False,num_workers=8, pin_memory=True, drop_last=False)
 	n_primary=len(final_modules)
 
-	pas_config=torch.load(pas_config)
-	pas_config.pop('module_names')
+	spw_config=torch.load(spw_config)
+	spw_config.pop('module_names')
 
-	model=MethylSPWNet(**pas_config)
+	model=MethylSPWNet(**spw_config)
 	model.load_state_dict(torch.load(model_state_dict_pkl))
 
 	if torch.cuda.is_available():

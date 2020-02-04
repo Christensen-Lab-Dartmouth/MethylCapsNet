@@ -147,7 +147,6 @@ def reduce_caps(capsules,allcpgs,min_capsule_len):
 	capsules_len=capsules_intersect.map(lambda x: x if len(x) >= min_capsule_len else [])
 	# with get_task_stream(plot='save', filename="task-stream.html") as ts:
 	capsules=capsules_len.compute()
-	print(capsules)
 	capsules=dict([(capsule_names[i],capsules[i].tolist()) for i in range(len(capsule_names)) if len(capsules[i])])
 	#print(list(capsules.keys()))
 	client.close()

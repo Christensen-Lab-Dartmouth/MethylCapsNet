@@ -50,7 +50,7 @@ class BCEWithNan(object):
 
 
 class MethylationDataset(Dataset):
-	def __init__(self, methyl_arr, outcome_col,binarizer=None, modules=[], module_names=None, original_interest_col=None, run_pas=False):
+	def __init__(self, methyl_arr, outcome_col,binarizer=None, modules=[], module_names=None, original_interest_col=None, run_spw=False):
 		if binarizer==None:
 			binarizer=LabelBinarizer()
 			binarizer.fit(methyl_arr.pheno[outcome_col].astype(str).values)
@@ -68,11 +68,11 @@ class MethylationDataset(Dataset):
 		if not modules:
 			modules=[list(methyl_arr.beta)]
 		self.modules=modules
-		if run_pas:
+		if run_spw:
 			self.idx=torch.tensor(np.array(list(reduce(lambda x,y:x+y,[[i]*len(module) for i,module in enumerate(self.modules)]))),dtype=torch.long)#torch.tensor(reduce(lambda x,y:x+y,self.modules))
 		else:
 			self.idx=None
-		self.run_pas=run_pas
+		self.run_spw=run_spw
 		self.X=methyl_arr.beta
 		print('Null val',self.X.isnull().sum().sum())
 		self.length=methyl_arr.beta.shape[0]
@@ -87,7 +87,7 @@ class MethylationDataset(Dataset):
 	#@pysnooper.snoop('getitem.log')
 	def __getitem__(self,i):
 		X=[torch.FloatTensor(self.X.iloc[i].values)]
-		modules=[torch.FloatTensor(self.X.iloc[i].loc[module].values) for module in self.modules] if not self.run_pas else [self.idx] # .reshape(1,-1) if not
+		modules=[torch.FloatTensor(self.X.iloc[i].loc[module].values) for module in self.modules] if not self.run_spw else [self.idx] # .reshape(1,-1) if not
 		y=[torch.FloatTensor(self.y[i])]
 		#y_orig=[torch.FloatTensor(self.y_orig[i].reshape(1,1))]
 		return tuple(X+modules+y)#+y_orig)
@@ -302,13 +302,15 @@ class CancelOut(nn.Module):
 	'''
 	def __init__(self,inp, *kargs, **kwargs):
 		super(CancelOut, self).__init__()
-		self.weight = nn.Parameter(torch.zeros(inp,requires_grad = True)+4)
-	def forward(self, x):
-		return (x * torch.sigmoid(self.weight.float()))
+		self.weight = nn.Parameter(torch.Tensor(inp))#,requires_grad = True
+		nn.init.uniform_(self.weight, a=0.0, b=4.0)
 
-class PASModulesLayer(nn.Module):
+	def forward(self, x):
+		return (x * torch.sigmoid(self.weight))
+
+class SPWModulesLayer(nn.Module):
 	def __init__(self, n_input,n_output,no_bias=True, use_cancel_out=True):
-		super(PASModulesLayer,self).__init__()
+		super(SPWModulesLayer,self).__init__()
 		self.weight=nn.Parameter(torch.zeros(1,n_input,requires_grad = True))
 		torch.nn.init.xavier_uniform_(self.weight)
 		self.bias=nn.Parameter(torch.zeros(1,n_output,requires_grad = True))
@@ -328,6 +330,7 @@ class PASModulesLayer(nn.Module):
 			WX=WX+torch.cat([self.bias]*batch_size,dim=0)
 		Z=self.nonlinear(WX)
 		if self.use_cancel_out:
+			print(self.cancel_out.weight.min())
 			Z=self.cancel_out(Z)
 		return Z
 
@@ -342,13 +345,13 @@ class MethylSPWNet(nn.Module):
 				torch.nn.init.xavier_uniform_(module.weight)
 			modules=[nn.Sequential(module,nn.ReLU(),nn.BatchNorm1d(module.out_features)) for module in modules]
 			self.pathways=nn.ModuleList(modules)
-		self.pathways=PASModulesLayer(sum(module_lens),len(module_lens))
+		self.pathways=SPWModulesLayer(sum(module_lens),len(module_lens))
 		self.output_net=MLP(len(module_lens), hidden_topology, dropout_p=dropout_p, n_outputs=n_output, binary=False, softmax=True, relu=False)
 		self.loss_fn=nn.CrossEntropyLoss()
 
 	def forward(self, x, idx):
-		X=self.pathways(x,idx)
-		return self.output_net(X)
+		Z=self.pathways(x,idx)
+		return self.output_net(Z),Z
 
 	if 0:
 		def forward(self, modules_x):
@@ -362,15 +365,15 @@ class MethylSPWNet(nn.Module):
 		return self.pathways.cancel_out.weight#self.output_net.mlp[0][0].weight
 
 	def calc_elastic_norm_loss(self, l1, l2):
-		weights=self.get_pathway_weights()
-		return l1*torch.sum(weights)+l2*torch.sum(weights**2)#l1*torch.norm(weights, p=1)+l2*torch.norm(weights, p=2)
+		weights=F.sigmoid(self.get_pathway_weights())
+		return l1*torch.norm(weights, 1)+l2*torch.norm(weights, 2)#l1*torch.norm(weights, p=1)+l2*torch.norm(weights, p=2)
 
 	def calc_pathway_importances(self):
 		return F.sigmoid(self.get_pathway_weights())#torch.sum(self.get_pathway_weights()**2,dim=0).detach().cpu().numpy()
 
 
 class Trainer:
-	def __init__(self, model, validation_dataloader, n_epochs, lr, n_primary, custom_loss, gamma2, class_balance=False, pas_mode=False, l1=0., l2=0.):
+	def __init__(self, model, validation_dataloader, n_epochs, lr, n_primary, custom_loss, gamma2, class_balance=False, spw_mode=False, l1=0., l2=0.):
 		self.model=model
 		self.validation_dataloader = validation_dataloader
 		self.lr = lr
@@ -385,7 +388,7 @@ class Trainer:
 		self.custom_loss_fn=dict(none=None,
 								  cox=CoxLoss())[self.custom_loss]
 		self.class_balance = class_balance
-		self.PASMode=pas_mode
+		self.SPWMode=spw_mode
 		self.l1=l1
 		self.l2=l2
 		self.construct_plots=False
@@ -404,7 +407,7 @@ class Trainer:
 
 	#@pysnooper.snoop('fit_model.log')
 	def fit(self, dataloader):
-		if not self.PASMode:
+		if not self.SPWMode:
 			self.initialize_dirs()
 		if self.class_balance:
 			self.weights=torch.tensor(compute_class_weight('balanced',np.arange(len(dataloader.dataset.binarizer.classes_)),np.argmax(dataloader.dataset.y,axis=1)),dtype=torch.float)
@@ -448,22 +451,23 @@ class Trainer:
 				x_orig=x_orig.cuda()
 				y_true=y_true.cuda()
 				#y_true_orig=y_true_orig.cuda()
-				module_x=[mod.cuda() for mod in module_x] if not self.PASMode else module_x[0].cuda()
-			if not self.PASMode:
+				module_x=[mod.cuda() for mod in module_x] if not self.SPWMode else module_x[0].cuda()
+			if not self.SPWMode:
 				x_orig, x_hat, y_pred, embedding, primary_caps_out=self.model(x_orig,module_x)
 				loss,margin_loss,recon_loss=self.model.calculate_loss(x_orig, x_hat, y_pred, y_true, weights=self.weights)
 			else:
 				y_true=y_true.argmax(1)
-				y_pred=self.model(x_orig,module_x)
-				loss=self.model.calculate_loss(y_pred,y_true)+self.model.calc_elastic_norm_loss(self.l1,self.l2)
+				y_pred,_=self.model(x_orig,module_x)
+				loss=self.model.calculate_loss(y_pred,y_true)
 				margin_loss=loss
+				loss=loss+self.model.calc_elastic_norm_loss(self.l1,self.l2)
 			#loss=loss+self.gamma2*self.compute_custom_loss(y_pred, y_true, y_true_orig)
 			self.optimizer.zero_grad()
 			with amp.scale_loss(loss,self.optimizer) as scaled_loss, detect_anomaly():
 				scaled_loss.backward()
 			#loss.backward()
 			self.optimizer.step()
-			if not self.PASMode:
+			if not self.SPWMode:
 				Y['true'].extend(y_true.argmax(1).detach().cpu().numpy().flatten().astype(int).tolist())
 				Y['pred'].extend(F.softmax(torch.sqrt((y_pred**2).sum(2))).argmax(1).detach().cpu().numpy().astype(int).flatten().tolist())
 			else:
@@ -486,7 +490,7 @@ class Trainer:
 		self.model.train(False)
 		running_loss=np.zeros((3,)).astype(float)
 		n_batch=int(np.ceil(len(dataloader.dataset.y_orig)/dataloader.batch_size))
-		Y={'true':[],'pred':[],'embedding_primarycaps_aligned':[],'embedding_primarycaps':[],'embedding_primarycaps_cat':[],'embedding_outputcaps':[],'routing_weights':[]}
+		Y={'true':[],'pred':[],'embedding_primarycaps_aligned':[],'embedding_primarycaps':[],'embedding_primarycaps_cat':[],'embedding_outputcaps':[],'routing_weights':[],'z':[]}
 		with torch.no_grad():
 			for i,batch in enumerate(dataloader):
 				x_orig=batch[0]
@@ -497,20 +501,22 @@ class Trainer:
 					x_orig=x_orig.cuda()
 					y_true=y_true.cuda()
 					#y_true_orig=y_true_orig.cuda()
-					module_x=[mod.cuda() for mod in module_x] if not self.PASMode else module_x[0].cuda()
-				if not self.PASMode:
+					module_x=[mod.cuda() for mod in module_x] if not self.SPWMode else module_x[0].cuda()
+				if not self.SPWMode:
 					x_orig, x_hat, y_pred, embedding, primary_caps_out=self.model(x_orig,module_x)
 					loss,margin_loss,recon_loss=self.model.calculate_loss(x_orig, x_hat, y_pred, y_true, weights=self.weights)
 				else:
 					y_true=y_true.argmax(1)
-					y_pred=self.model(x_orig,module_x)
-					loss=self.model.calculate_loss(y_pred,y_true)+self.model.calc_elastic_norm_loss(self.l1,self.l2)
+					y_pred,Z=self.model(x_orig,module_x)
+					loss=self.model.calculate_loss(y_pred,y_true)
 					margin_loss=loss
+					recon_loss=self.model.calc_elastic_norm_loss(self.l1,self.l2)
+					loss=loss+recon_loss
 				#loss=loss+self.gamma2*self.compute_custom_loss(y_pred, y_true, y_true_orig)
 				val_loss=margin_loss.item()#print(loss)
-				print('Epoch {} [{}/{}]: Val Loss {}'.format(self.epoch,i,n_batch,val_loss))
-				running_loss=running_loss+np.array([loss.item(),margin_loss,recon_loss.item() if not self.PASMode else 0.])
-				if not self.PASMode:
+				print('Epoch {} [{}/{}]: Val Loss {}, Recon/Elastic Loss {}'.format(self.epoch,i,n_batch,val_loss,recon_loss))
+				running_loss=running_loss+np.array([loss.item(),margin_loss,recon_loss.item() if not self.SPWMode else val_loss,margin_loss.item(),recon_loss.item()])
+				if not self.SPWMode:
 					routing_coefs=self.model.caps_output_layer.return_routing_coef().detach().cpu().numpy()
 					#print(routing_coefs.shape)
 					routing_coefs=routing_coefs[...,0,0]
@@ -527,8 +533,9 @@ class Trainer:
 				else:
 					Y['true'].extend(y_true.detach().cpu().numpy().flatten().astype(int).tolist())
 					Y['pred'].extend(y_pred.argmax(1).detach().cpu().numpy().flatten().astype(int).tolist())
+					Y['z'].append(Z.detach().cpu().numpy())
 			running_loss/=(i+1)
-			if not self.PASMode:
+			if not self.SPWMode:
 				#Y['routing_weights'].iloc[:,:]=Y['routing_weights'].values/(i+1)
 
 				rw=np.concatenate(Y['routing_weights'],axis=0)
@@ -551,6 +558,7 @@ class Trainer:
 			else:
 				Y['pred']=np.array(Y['pred']).astype(str)
 				Y['true']=np.array(Y['true']).astype(str)
+				Y['z']=pd.DataFrame(np.vstack(Y['z']),index=dataloader.dataset.sample_names,columns=dataloader.dataset.module_names)
 				print('Epoch {}: Val Loss {}, Margin Loss {}, Recon Loss {}, Val R2: {}, Val MAE: {}'.format(self.epoch,running_loss[0],running_loss[1],running_loss[2],r2_score(Y['true'].astype(float),Y['pred'].astype(float)), mean_absolute_error(Y['true'].astype(float),Y['pred'].astype(float))))
 				print(classification_report(Y['true'],Y['pred']))
 		return running_loss, Y
