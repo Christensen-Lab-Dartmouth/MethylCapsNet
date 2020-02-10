@@ -353,7 +353,7 @@ def return_final_capsules(methyl_array, capsule_choice, min_capsule_len, collect
 	cpgs,features=cpg_arr['cpg'].values,cpg_arr['feature'].unique()
 	split_idx=np.cumsum(np.bincount(LabelEncoder().fit_transform(cpg_arr['feature'].values).flatten().astype(int)).flatten().astype(int)).flatten().astype(int)[:-1]
 	capsules=np.split(cpgs,split_idx)
-	print(capsules)
+	# print(capsules)
 	return capsules,cpgs,features#cpg_arr['feature'].unique()#cpg_arr['cpg'].values
 
 @pysnooper.snoop('build_caps.log')

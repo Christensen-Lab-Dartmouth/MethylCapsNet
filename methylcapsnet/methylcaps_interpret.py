@@ -4,6 +4,7 @@ import numpy as np, pandas as pd
 from captum.attr import GradientShap
 import torch
 from torch.utils.data import DataLoader, Dataset, TensorDataset
+from torch.utils.data.sampler import SubsetRandomSampler
 from methylcapsnet.methylcaps_data_models import *
 
 def return_spw_importances_(train_methyl_array,
@@ -15,7 +16,8 @@ def return_spw_importances_(train_methyl_array,
 							n_bins,
 							spw_config,
 							model_state_dict_pkl,
-							batch_size
+							batch_size,
+							by_subtype=False
 							):
 	ma=MethylationArray.from_pickle(train_methyl_array)
 	ma_v=MethylationArray.from_pickle(val_methyl_array)
@@ -51,6 +53,9 @@ def return_spw_importances_(train_methyl_array,
 	datasets=dict()
 	datasets['train']=MethylationDataset(ma,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col, run_spw=True)
 	datasets['val']=MethylationDataset(ma_v,interest_col,modules=final_modules, module_names=module_names, original_interest_col=original_interest_col, run_spw=True)
+
+	y_val=datasets['val'].y_label
+	y_val_uniq=np.unique(y_val)
 
 	dataloaders=dict()
 	dataloaders['train']=DataLoader(datasets['train'],batch_size=batch_size,shuffle=True,num_workers=8, pin_memory=True, drop_last=True)
@@ -97,14 +102,34 @@ def return_spw_importances_(train_methyl_array,
 	X_train=torch.cat([next(iter(dataloaders['train']))[0] for i in range(2)],dim=0)
 	if torch.cuda.is_available():
 		X_train=X_train.cuda()
-	attributions=[]
+
 	#val_loader=iter(dataloaders['val'])
-	for i in range(20):
-		batch=next(iter(dataloaders['val']))
-		X_test=to_cuda(batch[0])
-		y_test=to_cuda(batch[1].flatten())
-		attributions.append(torch.abs(gs.attribute(X_test, stdevs=0.03, n_samples=200, baselines=X_train,
-									   target=y_test, return_convergence_delta=False)))#torch.tensor(y_i)
-	attributions=torch.sum(torch.cat(attributions,dim=0),dim=0)
-	importances=pd.Series(attributions.detach().cpu().numpy(),index=module_names).sort_values(ascending=False)
+
+
+	def return_importances(dataloaders, X_train):
+		attributions=[]
+		for i in range(20):
+			batch=next(iter(dataloaders['val']))
+			X_test=to_cuda(batch[0])
+			y_test=to_cuda(batch[1].flatten())
+			attributions.append(torch.abs(gs.attribute(X_test, stdevs=0.03, n_samples=200, baselines=X_train,
+										   target=y_test, return_convergence_delta=False)))#torch.tensor(y_i)
+		attributions=torch.sum(torch.cat(attributions,dim=0),dim=0)
+		importances=pd.DataFrame(pd.Series(attributions.detach().cpu().numpy(),index=module_names).sort_values(ascending=False),columns=['importances'])
+		return importances
+
+
+	if by_subtype:
+		importances=[]
+		for k in y_val_uniq:
+			idx=np.where(y_val==k)
+			sampler=SubsetRandomSampler(idx)
+			dataloaders['val']=DataLoader(tensor_data['val'],batch_size=32,sampler=sampler)
+			df=return_importances(dataloaders, X_train)
+			df['subtype']=k
+			importances.append(df)
+		importances=pd.concat(importances)
+	else:
+		importances=return_importances(dataloaders, X_train)
+
 	return importances

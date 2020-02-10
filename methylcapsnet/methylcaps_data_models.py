@@ -74,10 +74,11 @@ class MethylationDataset(Dataset):
 			self.idx=None
 		self.run_spw=run_spw
 		self.X=methyl_arr.beta
-		print('Null val',self.X.isnull().sum().sum())
+		# print('Null val',self.X.isnull().sum().sum())
 		self.length=methyl_arr.beta.shape[0]
 		self.module_names=module_names
 		self.pheno = methyl_arr.pheno
+		self.y_label=self.pheno[outcome_col].values
 		self.sample_names=self.pheno.index.values
 
 
@@ -305,6 +306,10 @@ class CancelOut(nn.Module):
 		self.weight = nn.Parameter(torch.Tensor(inp))#,requires_grad = True
 		nn.init.uniform_(self.weight, a=0.0, b=4.0)
 
+	def calc_elastic_norm_loss(self, l1, l2):
+		#weights=F.sigmoid(self.get_pathway_weights())
+		return l1*torch.sum(self.weight.flatten())+l2*torch.sum((self.weight**2).flatten())#l1*torch.norm(weights, 1)+l2*torch.norm(weights, 2)#l1*torch.norm(weights, p=1)+l2*torch.norm(weights, p=2)
+
 	def forward(self, x):
 		return (x * torch.sigmoid(self.weight))
 
@@ -330,7 +335,7 @@ class SPWModulesLayer(nn.Module):
 			WX=WX+torch.cat([self.bias]*batch_size,dim=0)
 		Z=self.nonlinear(WX)
 		if self.use_cancel_out:
-			print(self.cancel_out.weight.min())
+			# print(self.cancel_out.weight.min())
 			Z=self.cancel_out(Z)
 		return Z
 
@@ -365,8 +370,8 @@ class MethylSPWNet(nn.Module):
 		return self.pathways.cancel_out.weight#self.output_net.mlp[0][0].weight
 
 	def calc_elastic_norm_loss(self, l1, l2):
-		weights=F.sigmoid(self.get_pathway_weights())
-		return l1*torch.norm(weights, 1)+l2*torch.norm(weights, 2)#l1*torch.norm(weights, p=1)+l2*torch.norm(weights, p=2)
+		#weights=F.sigmoid(self.get_pathway_weights())
+		return self.pathways.cancel_out.calc_elastic_norm_loss(l1, l2)
 
 	def calc_pathway_importances(self):
 		return F.sigmoid(self.get_pathway_weights())#torch.sum(self.get_pathway_weights()**2,dim=0).detach().cpu().numpy()
@@ -515,7 +520,7 @@ class Trainer:
 				#loss=loss+self.gamma2*self.compute_custom_loss(y_pred, y_true, y_true_orig)
 				val_loss=margin_loss.item()#print(loss)
 				print('Epoch {} [{}/{}]: Val Loss {}, Recon/Elastic Loss {}'.format(self.epoch,i,n_batch,val_loss,recon_loss))
-				running_loss=running_loss+np.array([loss.item(),margin_loss,recon_loss.item() if not self.SPWMode else val_loss,margin_loss.item(),recon_loss.item()])
+				running_loss=running_loss+np.array([loss.item(),margin_loss,recon_loss.item()] if not self.SPWMode else [val_loss,margin_loss.item(),recon_loss.item()])
 				if not self.SPWMode:
 					routing_coefs=self.model.caps_output_layer.return_routing_coef().detach().cpu().numpy()
 					#print(routing_coefs.shape)

@@ -170,6 +170,7 @@ def extract_capsules(spwnet_model,spwnet_config,n_capsules,feature_csv,capsule_t
 @click.option('-n', '--n_capsules', default=0, help='Number pathways to extract.', show_default=True)
 @click.option('-txt', '--capsule_txt', default='custom_capsules.txt', help='Where to extract custom capsules.', type=click.Path(exists=False), show_default=True)
 @click.option('-csv', '--feature_csv', default='spwnet_importances.csv', help='All extracted pathway importances.', type=click.Path(exists=False), show_default=True)
+@click.option('-st', '--by_subtype', is_flag=True, help='Interrogate each subtype.', show_default=True)
 def return_spw_importances(train_methyl_array,
 							val_methyl_array,
 							interest_col,
@@ -181,7 +182,8 @@ def return_spw_importances(train_methyl_array,
 							batch_size,
 							n_capsules,
 							capsule_txt,
-							feature_csv):
+							feature_csv,
+							by_subtype):
 	from methylcapsnet.methylcaps_interpret import return_spw_importances_
 
 	importances=return_spw_importances_(train_methyl_array,
@@ -193,14 +195,12 @@ def return_spw_importances(train_methyl_array,
 								n_bins,
 								spw_config,
 								model_state_dict_pkl,
-								batch_size)
+								batch_size,
+								by_subtype)
 
-	pd.DataFrame(importances).to_csv(feature_csv)
+	importances.to_csv(feature_csv)
 	with open(capsule_txt,'w') as f:
 		f.write('\n'.join((importances.iloc[:n_capsules] if n_capsules else importances).index.values.tolist()))
-
-
-
 
 @methylcaps.command()
 @click.option('-j', '--job', default=0, help='Job number.', show_default=True)

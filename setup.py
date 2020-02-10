@@ -13,7 +13,8 @@ setup(name='methylcapsnet',
       entry_points={
             'console_scripts':['methylcaps-model=methylcapsnet.methylcapsnet_cli:methylcaps',
                                'methylcaps-hypscan=methylcapsnet.hyperparameter_scan:hypscan',
-                               'methylcaps-hypjob=methylcapsnet.hyperparameter_job:hypjob'
+                               'methylcaps-hypjob=methylcapsnet.hyperparameter_job:hypjob',
+                               'methylcaps-logreg=methylcapsnet.stacked_logistic_regression:main'
                                ]
       },
       long_description=long_description,
@@ -21,6 +22,7 @@ setup(name='methylcapsnet',
       packages=['methylcapsnet'],
       install_requires=['methylnet',
                         #'chocolate',
+                        'fire',
                         'torch-scatter',
                         'fsspec>=0.3.3',
                         'pybedtools',
@@ -29,5 +31,7 @@ setup(name='methylcapsnet',
                         'xarray==0.12.3',
                         'dask[bag,distributed,dataframe]',
                         'pathos',
-                        'captum'],
+                        'captum',
+                        'mlxtend',
+                        'progressbar2'],
       package_data={'methylcapsnet': ['data/*']})
