@@ -14,7 +14,7 @@ setup(name='methylcapsnet',
             'console_scripts':['methylcaps-model=methylcapsnet.methylcapsnet_cli:methylcaps',
                                'methylcaps-hypscan=methylcapsnet.hyperparameter_scan:hypscan',
                                'methylcaps-hypjob=methylcapsnet.hyperparameter_job:hypjob',
-                               'methylcaps-logreg=methylcapsnet.stacked_logistic_regression:main'
+                               'methylcaps-logreg=methylcapsnet.group_logistic_regression:main'
                                ]
       },
       long_description=long_description,

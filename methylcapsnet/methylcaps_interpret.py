@@ -3,7 +3,7 @@ from pymethylprocess.MethylationDataTypes import MethylationArray
 import numpy as np, pandas as pd
 from captum.attr import GradientShap
 import torch
-from torch.utils.data import DataLoader, Dataset, TensorDataset
+from torch.utils.data import DataLoader, Dataset, TensorDataset, Subset, ConcatDataset
 from torch.utils.data.sampler import SubsetRandomSampler
 from methylcapsnet.methylcaps_data_models import *
 
@@ -122,12 +122,17 @@ def return_spw_importances_(train_methyl_array,
 	if by_subtype:
 		importances=[]
 		for k in y_val_uniq:
-			idx=np.where(y_val==k)
-			sampler=SubsetRandomSampler(idx)
-			dataloaders['val']=DataLoader(tensor_data['val'],batch_size=32,sampler=sampler)
-			df=return_importances(dataloaders, X_train)
-			df['subtype']=k
-			importances.append(df)
+			idx=np.where(y_val==k)[0]
+			if len(idx)>2:
+				val_dataset=Subset(tensor_data['val'],idx)
+				n_concat=int(np.ceil(64./len(idx)))
+				if n_concat > 1:
+					val_dataset=ConcatDataset([val_dataset]*n_concat)
+				#sampler=SubsetRandomSampler(idx)
+				dataloaders['val']=DataLoader(val_dataset,batch_size=32,shuffle=True)
+				df=return_importances(dataloaders, X_train)
+				df['subtype']=k
+				importances.append(df)
 		importances=pd.concat(importances)
 	else:
 		importances=return_importances(dataloaders, X_train)

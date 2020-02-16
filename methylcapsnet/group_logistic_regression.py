@@ -12,9 +12,11 @@ from sklearn.metrics import f1_score, classification_report
 import pickle
 from sklearn.base import BaseEstimator, TransformerMixin, ClassifierMixin
 from sklearn.ensemble import StackingClassifier
-import torch
+import torch, copy
 # from skorch import NeuralNetClassifier
 import torch.nn.functional as F
+from torch.utils.data import TensorDataset, DataLoader
+from sklearn.utils.class_weight import compute_class_weight
 # from skorch.callbacks import EpochScoring
 from methylcapsnet.build_capsules import return_final_capsules
 from sklearn.linear_model import LogisticRegression
@@ -25,10 +27,16 @@ import dask
 from scipy import sparse
 from sklearn.base import clone
 from pathos.multiprocessing import ProcessPool
+import torch.optim as optim
 # # from cuml.linear_model import MBSGDClassifier as LogisticRegression
 #
 # # methylnet-torque run_torque_job -c "python comparison_methods.py" -gpu -a "conda activate methylnet_lite" -ao "-A Brock -l nodes=1:ppn=1" -q gpuq -t 5 -n 1 # -sup
 #
+
+def beta2M(beta):
+	beta[beta==0.]=beta[beta==0.]+1e-8
+	beta[beta==1.]=beta[beta==1.]-1e-8
+	return np.log2(beta/(1.-beta))
 
 class ParallelStackingClassifier(StackingClassifier):
 	def __init__(self, classifiers, meta_classifier,
@@ -214,6 +222,7 @@ def fit_logreg(train_methyl_array='train_val_test_sets/train_methyl_array.pkl',
 	for k in ['train','val','test']:
 		datasets[k]=MethylationArray.from_pickle(datasets[k])
 		X[k]=datasets[k].beta#cudf.from_pandas(datasets[k].beta)#
+		X[k].loc[:,:]=beta2M(X[k].loc[:,:].values)
 		Y[k]=le.fit_transform(datasets[k].pheno[outcome_col]) if k=='train' else le.transform(datasets[k].pheno[outcome_col])#cudf.Series(, dtype = np.float32 )
 
 	capsules,_,names=return_final_capsules(datasets['train'], capsule_choice, min_capsule_len, None,None, 0, '', '')
@@ -244,8 +253,178 @@ def fit_logreg(train_methyl_array='train_val_test_sets/train_methyl_array.pkl',
 	#pickle.dump(dict(coef=reg.coef_.T,index=datasets['test'].beta.columns.values,columns=le.classes_),open('logreg_coef_.pkl','wb'))
 	#pd.DataFrame(reg.coef_.T,index=datasets['test'].beta.columns.values,columns=le.classes_).to_csv('logreg_coef.pkl')
 
+class GroupLasso(nn.Module):
+	def __init__(self, names, cpg_arr, capsule_sizes, l1):
+		super().__init__()
+		self.names=names
+		self.cpg_arr=cpg_arr
+		self.capsule_sizes=capsule_sizes
+		self.l1=l1
+
+	def forward(self, W):
+		group_lasso_penalty=[]
+		for i,name in enumerate(self.names):
+			idx=self.cpg_arr.loc[self.cpg_arr['feature']==name,'cpg'].values
+			group_lasso_penalty.append(np.sqrt(self.capsule_sizes[i])*torch.norm(W[:,idx].flatten(),2))
+		group_lasso_penalty=self.l1*sum(group_lasso_penalty)
+		return group_lasso_penalty
+
+	def return_weights(self, W):
+		return np.array([np.sqrt(self.capsule_sizes[i])**(-1)*torch.norm(W[:,self.cpg_arr.loc[self.cpg_arr['feature']==self.names[i],'cpg'].values].flatten(),2).detach().cpu().numpy() for i in range(len(self.capsule_sizes))])
+
+def fit_group_lasso(train_methyl_array='train_val_test_sets/train_methyl_array.pkl',
+			   val_methyl_array='train_val_test_sets/val_methyl_array.pkl',
+			   test_methyl_array='train_val_test_sets/test_methyl_array.pkl',
+			   l1_vals=np.hstack((np.arange(0.01,1.1,0.1),np.array([10.,20.,50.,100.]))),
+			   outcome_col='disease_only',
+			   min_capsule_len=5,
+			   capsule_choice=['gene'],
+			   n_jobs=20,
+			   n_epochs=200,
+			   output_file='group_lasso_importances.csv'
+			   ):
+
+	datasets=dict(train=train_methyl_array,
+				  val=val_methyl_array,
+				  test=test_methyl_array)
+
+	# LogisticRegression = lambda ne, lr: net = NeuralNetClassifier(LogisticRegressionModel,max_epochs=ne,lr=lr,iterator_train__shuffle=True, callbacks=[EpochScoring(LASSO)])
+
+	X=dict()
+	Y=dict()
+	le=LabelEncoder()
+	for k in ['train','val','test']:
+		datasets[k]=MethylationArray.from_pickle(datasets[k])
+
+	capsules,cpgs,names,cpg_arr=return_final_capsules(datasets['train'], capsule_choice, min_capsule_len, None,None, 0, '', '', return_original_capsule_assignments=True)
+
+	cpgs=np.unique(cpgs)
+
+	cpg2idx=dict(zip(cpgs,np.arange(len(cpgs))))
+
+	cpg_arr.loc[:,'cpg']=cpg_arr.loc[:,'cpg'].map(cpg2idx)
+
+	capsule_sizes=[len(capsule) for capsule in capsules]
+
+	for k in ['train','val','test']:
+		X[k]=datasets[k].beta.loc[:,cpgs]#cudf.from_pandas(datasets[k].beta)#
+		X[k].loc[:,:]=beta2M(X[k].loc[:,:].values)
+		Y[k]=le.fit_transform(datasets[k].pheno[outcome_col]) if k=='train' else le.transform(datasets[k].pheno[outcome_col])#cudf.Series(, dtype = np.float32 )
+
+	class_weights=torch.tensor(compute_class_weight('balanced', np.unique(Y['train']), Y['train'])).float()
+
+	dataloaders={}
+
+	for k in ['train','val','test']:
+		X[k]=torch.tensor(X[k]).float()
+		Y[k]=torch.tensor(Y[k]).long()
+		dataloaders[k]=DataLoader(TensorDataset(X[k],Y[k]),batch_size=16,shuffle=(k=='train'),num_workers=n_jobs)
+
+	def train_model(l1, return_model=False):
+		logreg_model=nn.Sequential(nn.Linear(len(cpgs),len(np.unique(Y['train']))),nn.LogSoftmax())
+		if torch.cuda.is_available():
+			logreg_model=logreg_model.cuda()
+		group_lasso=GroupLasso(names,cpg_arr,capsule_sizes,l1)
+		optimizer = optim.Adam(logreg_model.parameters(), lr=0.0001)
+		# scheduler=
+		criterion=nn.NLLLoss(weight=class_weights)
+
+		for epoch in range(len(n_epochs)):
+			running_loss={'train':0.,'val':0.}
+			for phase in ['train','val']:
+				model.train(phase=='train')
+				for i,(x,y) in enumerate(dataloaders[phase]):
+					if torch.cuda.is_available():
+						x=x.cuda()
+						y=y.cuda()
+					optimizer.zero_grad()
+					loss=criterion(y,logreg_model(x))
+					loss=loss+group_lasso(logreg_model[0].weight)
+					if phase=='train':
+						loss.backward()
+					optimizer.step()
+					running_loss[phase].append(loss.item())
+				running_loss[phase]=np.mean(running_loss)
+			print("Epoch {} - Train Loss {} , Val Loss {}".format(epoch, running_loss['train'], running_loss['val']))
+			if epoch and running_loss['val']<=min_val_loss:
+				min_val_loss=running_loss['val']
+				best_model_weights=copy.deepcopy(logreg_model.state_dict())
+			elif not epoch:
+				min_val_loss=running_loss['val']
+		logreg_model=logreg_model.load_state_dict(best_model_weights)
+		if not return_model:
+			return l1,min_val_loss
+		else:
+			return logreg_model
+
+	l1_min_val=np.array([train_model(l1) for l1 in l1_vals])
+	l1=l1_min_val[np.argmin(l1_min_val[:,1]),0]
+
+	group_lasso=GroupLasso(names,cpg_arr,capsule_sizes,l1)
+
+	logreg_model=train_model(l1,return_model=True)
+	logreg_model.train(False)
+
+	y_res={'pred':[],'true':[]}
+	for i,(x,y) in enumerate(dataloaders['test']):
+		if torch.cuda.is_available():
+			x=x.cuda()
+			y=y.cuda()
+		y_res['true'].extend(y.detach().cpu().numpy().flatten().tolist())
+		y_res['pred'].extend(logreg_model(x).argmax(1).detach().cpu().numpy().flatten().tolist())
+	print(classification_report(le.inverse_transform(np.array(y_res['true'])),le.inverse_transform(np.array(y_res['pred']))))
+
+	weights=group_lasso.return_weights(logreg_model[0].weight)
+	pd.DataFrame(dict(zip(names,weights)),index=['importances']).T.to_csv(output_file)
+
+
+
+class Commands(object):
+	def __init__(self):
+		pass
+
+	def fit_logreg(self,
+						train_methyl_array='train_val_test_sets/train_methyl_array.pkl',
+					   val_methyl_array='train_val_test_sets/val_methyl_array.pkl',
+					   test_methyl_array='train_val_test_sets/test_methyl_array.pkl',
+					   l1_vals=np.hstack((np.arange(0.01,1.1,0.1),np.array([10.,20.,50.,100.]))),
+					   outcome_col='disease_only',
+					   min_capsule_len=5,
+					   capsule_choice=['gene'],
+					   n_jobs=20):
+		fit_logreg(train_methyl_array,
+					val_methyl_array,
+					test_methyl_array,
+					l1_vals,
+					outcome_col,
+					min_capsule_len,
+					capsule_choice,
+					n_jobs)
+
+	def group_lasso(self,
+						train_methyl_array='train_val_test_sets/train_methyl_array.pkl',
+					   val_methyl_array='train_val_test_sets/val_methyl_array.pkl',
+					   test_methyl_array='train_val_test_sets/test_methyl_array.pkl',
+					   l1_vals=np.hstack((np.arange(0.01,1.1,0.1),np.array([10.,20.,50.,100.]))),
+					   outcome_col='disease_only',
+					   min_capsule_len=5,
+					   capsule_choice=['gene'],
+					   n_jobs=20,
+					   n_epochs=200,
+					   output_file='group_lasso_importances.csv'):
+		fit_group_lasso(train_methyl_array,
+						   val_methyl_array,
+						   test_methyl_array,
+						   l1_vals,
+						   outcome_col,
+						   min_capsule_len,
+						   capsule_choice,
+						   n_jobs,
+						   n_epochs,
+						   output_file)
+
 def main():
-	fire.Fire(fit_logreg)
+	fire.Fire(Commands)
 
 if __name__=='__main__':
 	main()

@@ -320,8 +320,8 @@ def get_gene_sets(cpgs,final_capsules,collection,tissue,n_top_sets):
 	final_capsules=final_capsules[final_capsules['cpg'].isin(cpgs)]
 	return final_capsules[final_capsules['feature'].isin(gene_sets)]['cpg'].values
 
-@pysnooper.snoop('final_caps.log')
-def return_final_capsules(methyl_array, capsule_choice, min_capsule_len, collection,tissue, n_top_sets, limited_capsule_names_file, gsea_superset):
+#@pysnooper.snoop('final_caps.log')
+def return_final_capsules(methyl_array, capsule_choice, min_capsule_len, collection,tissue, n_top_sets, limited_capsule_names_file, gsea_superset, return_original_capsule_assignments=False):
 	from sklearn.preprocessing import LabelEncoder
 	global final_caps_files
 	if limited_capsule_names_file:
@@ -354,7 +354,10 @@ def return_final_capsules(methyl_array, capsule_choice, min_capsule_len, collect
 	split_idx=np.cumsum(np.bincount(LabelEncoder().fit_transform(cpg_arr['feature'].values).flatten().astype(int)).flatten().astype(int)).flatten().astype(int)[:-1]
 	capsules=np.split(cpgs,split_idx)
 	# print(capsules)
-	return capsules,cpgs,features#cpg_arr['feature'].unique()#cpg_arr['cpg'].values
+	if return_original_capsule_assignments:
+		return capsules,cpgs,features,cpg_arr[['feature','cpg']]
+	else:
+		return capsules,cpgs,features#cpg_arr['feature'].unique()#cpg_arr['cpg'].values
 
 @pysnooper.snoop('build_caps.log')
 def build_capsules(capsule_choice,
