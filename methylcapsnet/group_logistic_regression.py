@@ -13,6 +13,8 @@ import pickle
 from sklearn.base import BaseEstimator, TransformerMixin, ClassifierMixin
 from sklearn.ensemble import StackingClassifier
 import torch, copy
+import torch.nn as nn
+import torch_scatter
 # from skorch import NeuralNetClassifier
 import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader
@@ -28,10 +30,20 @@ from scipy import sparse
 from sklearn.base import clone
 from pathos.multiprocessing import ProcessPool
 import torch.optim as optim
+import torchsnooper
+from itertools import combinations
+from scipy.stats import pearsonr
+# from multiprocessing import set_start_method
+from torch.multiprocessing import Pool, Process, set_start_method
+
+try:
+    set_start_method('spawn')
+except RuntimeError:
+    pass
 # # from cuml.linear_model import MBSGDClassifier as LogisticRegression
 #
 # # methylnet-torque run_torque_job -c "python comparison_methods.py" -gpu -a "conda activate methylnet_lite" -ao "-A Brock -l nodes=1:ppn=1" -q gpuq -t 5 -n 1 # -sup
-#
+# nohup python group_logistic_regression.py group_lasso --l1_vals [0.,0.1,1.,5.,10.,20.,100.,1000.] --n_epochs 50 &
 
 def beta2M(beta):
 	beta[beta==0.]=beta[beta==0.]+1e-8
@@ -254,35 +266,66 @@ def fit_logreg(train_methyl_array='train_val_test_sets/train_methyl_array.pkl',
 	#pd.DataFrame(reg.coef_.T,index=datasets['test'].beta.columns.values,columns=le.classes_).to_csv('logreg_coef.pkl')
 
 class GroupLasso(nn.Module):
-	def __init__(self, names, cpg_arr, capsule_sizes, l1):
+	def __init__(self, n_features, n_classes, names, cpg_arr, capsule_sizes, l1):
 		super().__init__()
+		self.n_features=n_features
+		self.n_classes=n_classes
 		self.names=names
 		self.cpg_arr=cpg_arr
 		self.capsule_sizes=capsule_sizes
 		self.l1=l1
-
-	def forward(self, W):
-		group_lasso_penalty=[]
+		self.model=nn.Linear(self.n_features,self.n_classes)
+		if torch.cuda.is_available():
+			self.model=self.model.cuda()
+		self.weights=[]
+		self.groups=[]
 		for i,name in enumerate(self.names):
 			idx=self.cpg_arr.loc[self.cpg_arr['feature']==name,'cpg'].values
-			group_lasso_penalty.append(np.sqrt(self.capsule_sizes[i])*torch.norm(W[:,idx].flatten(),2))
-		group_lasso_penalty=self.l1*sum(group_lasso_penalty)
+			w=self.model.weight[:,idx].flatten()#**2
+			self.weights.append(w)
+			self.groups.extend([i]*len(w))
+		self.weights=torch.cat(self.weights,0)
+		# self.groups=torch.tensor(np.array(self.groups),device=('cuda' if torch.cuda.is_available() else 'cpu'))
+		# self.sqrt_group_sizes=torch.tensor(np.sqrt(np.array(self.capsule_sizes)),device=('cuda' if torch.cuda.is_available() else 'cpu'))
+
+	def forward(self,x):
+		return self.model(x)
+
+	def penalize(self, lasso_for_loop=True):
+		lasso_for_loop=True
+		if lasso_for_loop:
+			W=self.model.weight
+			group_lasso_penalty=[]
+			for i,name in enumerate(self.names):
+				idx=self.cpg_arr.loc[self.cpg_arr['feature']==name,'cpg'].values
+				group_lasso_penalty.append(np.sqrt(self.capsule_sizes[i])*torch.norm(W[:,idx].flatten(),2))
+			group_lasso_penalty=sum(group_lasso_penalty)
+		else:
+			group_lasso_penalty=self.l1*torch.sum(torch.sqrt(torch_scatter.scatter_add(self.weights**2,self.groups))*self.sqrt_group_sizes)#sum(group_lasso_penalty)
+		# print(group_lasso_penalty)
 		return group_lasso_penalty
 
-	def return_weights(self, W):
+	def return_weights(self):
+		W=self.model.weight
 		return np.array([np.sqrt(self.capsule_sizes[i])**(-1)*torch.norm(W[:,self.cpg_arr.loc[self.cpg_arr['feature']==self.names[i],'cpg'].values].flatten(),2).detach().cpu().numpy() for i in range(len(self.capsule_sizes))])
 
 def fit_group_lasso(train_methyl_array='train_val_test_sets/train_methyl_array.pkl',
 			   val_methyl_array='train_val_test_sets/val_methyl_array.pkl',
 			   test_methyl_array='train_val_test_sets/test_methyl_array.pkl',
-			   l1_vals=np.hstack((np.arange(0.01,1.1,0.1),np.array([10.,20.,50.,100.]))),
+			   l1_vals=np.hstack((np.arange(0.01,1.1,0.1),np.array([10.,20.,50.,100.]))).tolist(),
 			   outcome_col='disease_only',
 			   min_capsule_len=5,
 			   capsule_choice=['gene'],
 			   n_jobs=20,
-			   n_epochs=200,
-			   output_file='group_lasso_importances.csv'
+			   n_epochs=10,
+			   output_file='group_lasso_importances.csv',
+			   batch_size=1280,
+			   lr=0.0001,
+			   predict=False
 			   ):
+
+	# if torch.cuda.is_available():
+	# 	torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 	datasets=dict(train=train_methyl_array,
 				  val=val_methyl_array,
@@ -311,72 +354,135 @@ def fit_group_lasso(train_methyl_array='train_val_test_sets/train_methyl_array.p
 		X[k].loc[:,:]=beta2M(X[k].loc[:,:].values)
 		Y[k]=le.fit_transform(datasets[k].pheno[outcome_col]) if k=='train' else le.transform(datasets[k].pheno[outcome_col])#cudf.Series(, dtype = np.float32 )
 
+	n_classes=len(np.unique(Y['train']))
+	n_cpgs=len(cpgs)
+
 	class_weights=torch.tensor(compute_class_weight('balanced', np.unique(Y['train']), Y['train'])).float()
+
+	if torch.cuda.is_available():
+		class_weights=class_weights.cuda()
 
 	dataloaders={}
 
 	for k in ['train','val','test']:
-		X[k]=torch.tensor(X[k]).float()
+		X[k]=torch.tensor(X[k].values).float()
 		Y[k]=torch.tensor(Y[k]).long()
-		dataloaders[k]=DataLoader(TensorDataset(X[k],Y[k]),batch_size=16,shuffle=(k=='train'),num_workers=n_jobs)
+		dataloaders[k]=DataLoader(TensorDataset(X[k],Y[k]),batch_size=min(batch_size,X[k].shape[0]),shuffle=(k=='train'),num_workers=n_jobs)
 
+	def get_res(logreg_model,dataloader=dataloaders['test']):
+		y_res={'pred':[],'true':[]}
+		for i,(x,y) in enumerate(dataloader):
+			if torch.cuda.is_available():
+				x=x.cuda()
+				y=y.cuda()
+			y_res['true'].extend(y.detach().cpu().numpy().flatten().tolist())
+			y_res['pred'].extend(logreg_model(x).argmax(1).detach().cpu().numpy().flatten().tolist())
+		y_true=le.inverse_transform(np.array(y_res['true']))
+		y_pred=le.inverse_transform(np.array(y_res['pred']))
+		print(classification_report(y_true,y_pred))
+		return f1_score(y_true,y_pred,average='macro')
+
+	# @torchsnooper.snoop()
 	def train_model(l1, return_model=False):
-		logreg_model=nn.Sequential(nn.Linear(len(cpgs),len(np.unique(Y['train']))),nn.LogSoftmax())
+		logreg_model=GroupLasso(n_cpgs, n_classes,names,cpg_arr,capsule_sizes,l1)#nn.Module(nn.Linear())#nn.Sequential(,nn.LogSoftmax())
 		if torch.cuda.is_available():
 			logreg_model=logreg_model.cuda()
-		group_lasso=GroupLasso(names,cpg_arr,capsule_sizes,l1)
-		optimizer = optim.Adam(logreg_model.parameters(), lr=0.0001)
+			logreg_model.weights=logreg_model.weights.cuda()
+			# logreg_model.groups=logreg_model.groups.cuda()
+			# logreg_model.sqrt_group_sizes=logreg_model.sqrt_group_sizes.cuda()
+		optimizer = optim.Adam(logreg_model.parameters(), lr=lr)
 		# scheduler=
-		criterion=nn.NLLLoss(weight=class_weights)
+		criterion=nn.CrossEntropyLoss(weight=class_weights)
 
-		for epoch in range(len(n_epochs)):
-			running_loss={'train':0.,'val':0.}
+		for epoch in range(n_epochs):
+			running_loss={'train':[],'val':[]}
 			for phase in ['train','val']:
-				model.train(phase=='train')
+				logreg_model.train(phase=='train')
 				for i,(x,y) in enumerate(dataloaders[phase]):
 					if torch.cuda.is_available():
 						x=x.cuda()
 						y=y.cuda()
 					optimizer.zero_grad()
-					loss=criterion(y,logreg_model(x))
-					loss=loss+group_lasso(logreg_model[0].weight)
+					#print(y.shape,logreg_model(x).shape)
+					y_pred=logreg_model(x)
+					loss=criterion(y_pred,y)
+					loss=loss+logreg_model.penalize()
+
+					#group_lasso()#group_lasso(logreg_model[0].weight)
 					if phase=='train':
 						loss.backward()
-					optimizer.step()
-					running_loss[phase].append(loss.item())
-				running_loss[phase]=np.mean(running_loss)
+						optimizer.step()
+					# 	optimizer.zero_grad()
+					# penalty=logreg_model.penalize()
+					# if phase=='train':
+					# 	penalty.backward(retain_graph=True)
+					# 	optimizer.step()
+					# loss=loss+penalty
+					item_loss=loss.item()
+					print("Epoch {}[Batch {}] - {} Loss {} ".format(epoch, i, phase, item_loss))
+					running_loss[phase].append(item_loss)
+				running_loss[phase]=np.mean(running_loss[phase])
 			print("Epoch {} - Train Loss {} , Val Loss {}".format(epoch, running_loss['train'], running_loss['val']))
 			if epoch and running_loss['val']<=min_val_loss:
 				min_val_loss=running_loss['val']
 				best_model_weights=copy.deepcopy(logreg_model.state_dict())
 			elif not epoch:
 				min_val_loss=running_loss['val']
-		logreg_model=logreg_model.load_state_dict(best_model_weights)
+		logreg_model.load_state_dict(best_model_weights)
+
 		if not return_model:
-			return l1,min_val_loss
+			return l1,get_res(logreg_model,dataloader=dataloaders['val'])
 		else:
 			return logreg_model
+	# pool=ProcessPool(nodes=8)
+	# l1_f1=np.array(pool.map(train_model, l1_vals))
+	l1_f1=np.array(dask.compute(*[dask.delayed(train_model)(l1) for l1 in l1_vals],scheduler='threading'))#np.array([train_model(l1) for l1 in l1_vals])
 
-	l1_min_val=np.array([train_model(l1) for l1 in l1_vals])
-	l1=l1_min_val[np.argmin(l1_min_val[:,1]),0]
+	l1=l1_f1[np.argmax(l1_f1[:,1]),0]
 
-	group_lasso=GroupLasso(names,cpg_arr,capsule_sizes,l1)
+	# group_lasso=GroupLasso(len(cpgs),len(np.unique(Y['train'])),names,cpg_arr,capsule_sizes,l1)
 
 	logreg_model=train_model(l1,return_model=True)
 	logreg_model.train(False)
 
-	y_res={'pred':[],'true':[]}
-	for i,(x,y) in enumerate(dataloaders['test']):
-		if torch.cuda.is_available():
-			x=x.cuda()
-			y=y.cuda()
-		y_res['true'].extend(y.detach().cpu().numpy().flatten().tolist())
-		y_res['pred'].extend(logreg_model(x).argmax(1).detach().cpu().numpy().flatten().tolist())
-	print(classification_report(le.inverse_transform(np.array(y_res['true'])),le.inverse_transform(np.array(y_res['pred']))))
+	get_res(logreg_model)
 
-	weights=group_lasso.return_weights(logreg_model[0].weight)
+	torch.save(dict(model=logreg_model,l1=l1_f1),'group_lasso_model.pkl')
+
+	weights=logreg_model.return_weights()
 	pd.DataFrame(dict(zip(names,weights)),index=['importances']).T.to_csv(output_file)
 
+def get_correlation_network_(train_methyl_array='train_val_test_sets/train_methyl_array.pkl',
+			   val_methyl_array='train_val_test_sets/val_methyl_array.pkl',
+			   test_methyl_array='train_val_test_sets/test_methyl_array.pkl',
+			   min_capsule_len=5,
+			   capsule_choice=['gene'],
+			   n_jobs=20,
+			   output_file='corr_mat.pkl'
+			   ):
+
+	# if torch.cuda.is_available():
+	# 	torch.set_default_tensor_type('torch.cuda.FloatTensor')
+
+	datasets=dict(train=train_methyl_array,
+				  val=val_methyl_array,
+				  test=test_methyl_array)
+
+	# LogisticRegression = lambda ne, lr: net = NeuralNetClassifier(LogisticRegressionModel,max_epochs=ne,lr=lr,iterator_train__shuffle=True, callbacks=[EpochScoring(LASSO)])
+
+	X=dict()
+	for k in ['train','val','test']:
+		X[k]=MethylationArray.from_pickle(datasets[k]).beta
+
+	capsules,_,names,cpg_arr=return_final_capsules(datasets['train'], capsule_choice, min_capsule_len, None,None, 0, '', '', return_original_capsule_assignments=True)
+
+	caps={names[i]:X['train'].loc[:,cpgs].apply(np.median,axis=1).values for i,cpgs in enumerate(capsules)} # maybe add more values
+
+	df=pd.DataFrame(1.,index=names,columns=names)
+	for c1,c2 in combinations(names,r=2):
+		df.loc[c1,c2]=pearsonr(caps[c1],caps[c2])
+
+	df.to_pickle(output_file)
 
 
 class Commands(object):
@@ -405,7 +511,7 @@ class Commands(object):
 						train_methyl_array='train_val_test_sets/train_methyl_array.pkl',
 					   val_methyl_array='train_val_test_sets/val_methyl_array.pkl',
 					   test_methyl_array='train_val_test_sets/test_methyl_array.pkl',
-					   l1_vals=np.hstack((np.arange(0.01,1.1,0.1),np.array([10.,20.,50.,100.]))),
+					   l1_vals=np.hstack((np.arange(0.01,1.1,0.1),np.array([10.,20.,50.,100.]))).tolist(),
 					   outcome_col='disease_only',
 					   min_capsule_len=5,
 					   capsule_choice=['gene'],
@@ -422,6 +528,23 @@ class Commands(object):
 						   n_jobs,
 						   n_epochs,
 						   output_file)
+
+	def get_correlation_network(train_methyl_array='train_val_test_sets/train_methyl_array.pkl',
+				   val_methyl_array='train_val_test_sets/val_methyl_array.pkl',
+				   test_methyl_array='train_val_test_sets/test_methyl_array.pkl',
+				   min_capsule_len=5,
+				   capsule_choice=['gene'],
+				   n_jobs=20,
+				   output_file='corr_mat.pkl'
+				   ):
+		get_correlation_network_(train_methyl_array,
+					   val_methyl_array,
+					   test_methyl_array,
+					   min_capsule_len,
+					   capsule_choice,
+					   n_jobs,
+					   output_file
+					   )
 
 def main():
 	fire.Fire(Commands)

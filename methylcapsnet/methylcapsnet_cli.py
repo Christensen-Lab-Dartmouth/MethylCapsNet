@@ -151,7 +151,7 @@ def extract_capsules(spwnet_model,spwnet_config,n_capsules,feature_csv,capsule_t
 	module_names=spwnet_config.pop('module_names')
 	model=MethylSPWNet(**spwnet_config)
 	model.load_state_dict(torch.load(spwnet_model))
-	importances=model.calc_pathway_importances().detach().cpu().numpy()
+	importances=model.calc_pathway_importances([len(capsule) for capsule in spwnet_config.pop('capsules')]).detach().cpu().numpy()
 	importances=pd.Series(importances,index=module_names).sort_values(ascending=False)
 	pd.DataFrame(importances).to_csv(feature_csv)
 	with open(capsule_txt,'w') as f:

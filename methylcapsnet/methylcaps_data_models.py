@@ -314,7 +314,7 @@ class CancelOut(nn.Module):
 		return (x * torch.sigmoid(self.weight))
 
 class SPWModulesLayer(nn.Module):
-	def __init__(self, n_input,n_output,no_bias=True, use_cancel_out=True):
+	def __init__(self, n_input,n_output,no_bias=True, use_cancel_out=True, capsule_sizes=[]):
 		super(SPWModulesLayer,self).__init__()
 		self.weight=nn.Parameter(torch.zeros(1,n_input,requires_grad = True))
 		torch.nn.init.xavier_uniform_(self.weight)
@@ -324,7 +324,14 @@ class SPWModulesLayer(nn.Module):
 		self.no_bias=no_bias
 		self.cancel_out=CancelOut(n_output)
 		self.use_cancel_out=use_cancel_out
+		self.capsule_sizes=torch.sqrt(torch.FloatTensor(capsule_sizes))
+		if torch.cuda.is_available:
+			self.capsule_sizes=self.capsule_sizes.cuda()
+		# self.n_groups=torch.sqrt(n_groups) # FIX
 
+	def calc_elastic_norm_loss(self, l1, l2, idx): # FIX, add proper sqrt for L2 norm
+		#weights=F.sigmoid(self.get_pathway_weights())
+		return l1*torch.sum(self.capsule_sizes*torch.sqrt(torch_scatter.scatter_add(self.weight**2,idx,dim_size=self.n_output)))#l1*torch.sum(self.weight.flatten())+l2*torch.sum((self.weight**2).flatten())#l1*torch.norm(weights, 1)+l2*torch.norm(weights, 2)#l1*torch.norm(weights, p=1)+l2*torch.norm(weights, p=2)
 
 	def forward(self,x,idx):
 		batch_size=x.size(0)
@@ -342,7 +349,7 @@ class SPWModulesLayer(nn.Module):
 
 
 class MethylSPWNet(nn.Module):
-	def __init__(self, module_lens, hidden_topology, dropout_p, n_output):
+	def __init__(self, module_lens, hidden_topology, dropout_p, n_output, use_cancel_out=False):
 		super(MethylSPWNet,self).__init__()
 		if 0:
 			modules=[nn.Linear(module_len,1) for module_len in module_lens]
@@ -350,7 +357,8 @@ class MethylSPWNet(nn.Module):
 				torch.nn.init.xavier_uniform_(module.weight)
 			modules=[nn.Sequential(module,nn.ReLU(),nn.BatchNorm1d(module.out_features)) for module in modules]
 			self.pathways=nn.ModuleList(modules)
-		self.pathways=SPWModulesLayer(sum(module_lens),len(module_lens))
+		self.use_cancel_out=use_cancel_out
+		self.pathways=SPWModulesLayer(sum(module_lens),len(module_lens),use_cancel_out=use_cancel_out,capsule_sizes=module_lens)
 		self.output_net=MLP(len(module_lens), hidden_topology, dropout_p=dropout_p, n_outputs=n_output, binary=False, softmax=True, relu=False)
 		self.loss_fn=nn.CrossEntropyLoss()
 
@@ -366,15 +374,15 @@ class MethylSPWNet(nn.Module):
 	def calculate_loss(self, y_pred, y_true):
 		return self.loss_fn(y_pred,y_true)
 
-	def get_pathway_weights(self):
-		return self.pathways.cancel_out.weight#self.output_net.mlp[0][0].weight
+	def get_pathway_weights(self, idx):
+		return torch.sqrt(torch_scatter.scatter_add(self.pathways.weight**2,idx,dim_size=self.pathways.n_output)))/self.pathways.capsule_sizes#self.pathways.cancel_out.weight#self.output_net.mlp[0][0].weight
 
-	def calc_elastic_norm_loss(self, l1, l2):
+	def calc_elastic_norm_loss(self, l1, l2, idx):
 		#weights=F.sigmoid(self.get_pathway_weights())
-		return self.pathways.cancel_out.calc_elastic_norm_loss(l1, l2)
+		return self.pathways.calc_elastic_norm_loss(l1, l2, idx)#self.pathways.cancel_out.calc_elastic_norm_loss(l1, l2)
 
-	def calc_pathway_importances(self):
-		return F.sigmoid(self.get_pathway_weights())#torch.sum(self.get_pathway_weights()**2,dim=0).detach().cpu().numpy()
+	def calc_pathway_importances(self, idx):
+		return F.sigmoid(self.get_pathway_weights(idx))#torch.sum(self.get_pathway_weights()**2,dim=0).detach().cpu().numpy()
 
 
 class Trainer:
@@ -465,7 +473,7 @@ class Trainer:
 				y_pred,_=self.model(x_orig,module_x)
 				loss=self.model.calculate_loss(y_pred,y_true)
 				margin_loss=loss
-				loss=loss+self.model.calc_elastic_norm_loss(self.l1,self.l2)
+				loss=loss+self.model.calc_elastic_norm_loss(self.l1,self.l2, module_x)
 			#loss=loss+self.gamma2*self.compute_custom_loss(y_pred, y_true, y_true_orig)
 			self.optimizer.zero_grad()
 			with amp.scale_loss(loss,self.optimizer) as scaled_loss, detect_anomaly():
