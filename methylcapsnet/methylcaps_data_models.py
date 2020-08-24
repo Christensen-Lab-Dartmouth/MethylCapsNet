@@ -333,7 +333,7 @@ class SPWModulesLayer(nn.Module):
 		#weights=F.sigmoid(self.get_pathway_weights())
 		return l1*torch.sum(self.capsule_sizes*torch.sqrt(torch_scatter.scatter_add(self.weight**2,idx,dim_size=self.n_output)))#l1*torch.sum(self.weight.flatten())+l2*torch.sum((self.weight**2).flatten())#l1*torch.norm(weights, 1)+l2*torch.norm(weights, 2)#l1*torch.norm(weights, p=1)+l2*torch.norm(weights, p=2)
 
-	def forward(self,x,idx):
+	def forward(self, x, idx):
 		batch_size=x.size(0)
 		#print(x.size(),torch.cat([self.weight]*batch_size,dim=0).size(),self.weight.size(),self.bias.size())
 		WX=torch_scatter.scatter_add(x*torch.cat([self.weight]*batch_size,dim=0),idx,dim_size=self.n_output)
@@ -375,7 +375,7 @@ class MethylSPWNet(nn.Module):
 		return self.loss_fn(y_pred,y_true)
 
 	def get_pathway_weights(self, idx):
-		return torch.sqrt(torch_scatter.scatter_add(self.pathways.weight**2,idx,dim_size=self.pathways.n_output)))/self.pathways.capsule_sizes#self.pathways.cancel_out.weight#self.output_net.mlp[0][0].weight
+		return torch.sqrt(torch_scatter.scatter_add(self.pathways.weight**2,idx,dim_size=self.pathways.n_output))/self.pathways.capsule_sizes#self.pathways.cancel_out.weight#self.output_net.mlp[0][0].weight
 
 	def calc_elastic_norm_loss(self, l1, l2, idx):
 		#weights=F.sigmoid(self.get_pathway_weights())
@@ -523,7 +523,7 @@ class Trainer:
 					y_pred,Z=self.model(x_orig,module_x)
 					loss=self.model.calculate_loss(y_pred,y_true)
 					margin_loss=loss
-					recon_loss=self.model.calc_elastic_norm_loss(self.l1,self.l2)
+					recon_loss=self.model.calc_elastic_norm_loss(self.l1,self.l2, module_x)
 					loss=loss+recon_loss
 				#loss=loss+self.gamma2*self.compute_custom_loss(y_pred, y_true, y_true_orig)
 				val_loss=margin_loss.item()#print(loss)
