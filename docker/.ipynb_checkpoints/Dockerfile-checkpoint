@@ -1,16 +1,14 @@
-FROM joshualevy44/methylnet:latest
+FROM joshualevy44/methylnet:0.1
 
 RUN mkdir ./methylcaps_code
 
 COPY . ./methylcaps_code/
 
-RUN conda install -y -c bioconda bedtools
+RUN apt install -y bedtools git-lfs
 
-RUN pip3 install --upgrade setuptools
+RUN git clone https://github.com/Christensen-Lab-Dartmouth/MethylCapsNet 
 
-RUN apt install git-lfs
-
-RUN git clone https://github.com/Christensen-Lab-Dartmouth/MethylCapsNet && cd MethylCapsNet && pip install . && install_methylcaps_dependencies
+RUN cd MethylCapsNet && pip install . && install_methylcaps_dependencies && cd .
 
 RUN cp -al ./methylcaps_code/test_data/* /pymethyl/
 
