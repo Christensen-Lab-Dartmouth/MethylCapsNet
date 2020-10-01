@@ -204,6 +204,14 @@ def return_spw_importances(train_methyl_array,
         
 @methylcaps.command()
 def execute_top_job(): subprocess.call("sh top_command.sh",shell=True)
+    
+@methylcaps.command()
+@click.option('-td', '--test_data_dir', default='./test_data/train_val_test_sets', help='Where to find training and validation sets.', type=click.Path(exists=False), show_default=True)
+def test_pipeline(test_data_dir):
+	command=f"methylcaps-model model_capsnet --bin_len 900000 --caps_out_len 15 --gamma 0.0001 --learning_rate 0.001 --min_capsule_len 300 --primary_caps_out_len 35 --routing_iterations 2 --hidden_topology 160,40 --decoder_topology 220,270 --train_methyl_array {test_data_dir}/train_methyl_array.pkl --val_methyl_array {test_data_dir}/val_methyl_array.pkl --interest_col disease_only --custom_loss none --job 6423388 --batch_size 16 --n_epochs 50 --capsule_choice genomic_binned --gamma2 0.01"
+	subprocess.call(command,shell=True)
+	subprocess.call(f"{command} --predict",shell=True)
+	print("Input predictions.pkl into web_app/WebApp.ipynb") 
         
 @methylcaps.command()
 @click.option('-j', '--job', default=0, help='Job number.', show_default=True)
