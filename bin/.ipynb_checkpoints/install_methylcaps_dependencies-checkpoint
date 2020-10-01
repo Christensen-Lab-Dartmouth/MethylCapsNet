@@ -1,0 +1,17 @@
+#!/bin/bash
+export TMPDIR=$HOME/tmp
+mkdir -p $TMPDIR
+rm -rf apex
+git clone https://github.com/NVIDIA/apex
+cd apex
+pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./ || pip install -v --no-cache-dir ./
+cd ..
+rm -rf apex
+
+pip install git+https://github.com/AIworx-Labs/chocolate@master
+
+git clone https://github.com/Christensen-Lab-Dartmouth/methyl_capsule_data
+cd methyl_capsule_data
+git lfs pull
+pip install .
+cd ..

@@ -23,6 +23,7 @@ import sqlite3
 import os
 import glob
 import dask
+import methyl_capsules
 from dask.diagnostics import ProgressBar
 from pathos.multiprocessing import Pool
 import multiprocessing
@@ -40,7 +41,7 @@ def print_if_exists(f):
 	else:
 		print('{} does not exist'.format(f))
 
-methylcaps_dir=os.path.dirname(methylcapsnet.__file__)
+methylcaps_dir=os.path.dirname(methyl_capsules.__file__)
 annotations450 = os.path.abspath(os.path.join(methylcaps_dir, 'data/450kannotations.bed'))
 hg19 = os.path.abspath(os.path.join(methylcaps_dir, 'data/hg19.genome'))
 selected_caps_file = os.path.abspath(os.path.join(methylcaps_dir, 'data/selected_capsules.p'))

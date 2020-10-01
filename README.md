@@ -12,8 +12,7 @@ git clone https://github.com/Christensen-Lab-Dartmouth/MethylCapsNet
 cd MethylCapsNet
 git lfs pull
 pip install .
-install_apex
-install_chocolate
+install_methylcaps_dependencies
 ```
 
 ![workflow](https://user-images.githubusercontent.com/19698023/91460016-58543800-e855-11ea-923e-cf58e0fc8074.png)
