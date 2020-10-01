@@ -15,5 +15,7 @@ pip install .
 install_methylcaps_dependencies
 ```
 
+Credits for assistance with R scripts: https://github.com/SamBuckberry/RUN-WGCNA
+
 ![workflow](https://user-images.githubusercontent.com/19698023/91460016-58543800-e855-11ea-923e-cf58e0fc8074.png)
 ![workflow2](https://user-images.githubusercontent.com/19698023/91459869-29d65d00-e855-11ea-8e89-4e701c00cc70.jpeg)
