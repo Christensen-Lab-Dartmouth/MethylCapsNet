@@ -1,0 +1,330 @@
+---
+title: "WGCNA_analysis2"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+lib.paths="/mnt/users/jlevy/R/x86_64-redhat-linux-gnu-library/3.6/"
+.libPaths(lib.paths)
+library(WGCNA)
+setwd(lib.paths)
+# https://github.com/SamBuckberry/RUN-WGCNA
+```
+
+```{r}
+library(feather)
+library(WGCNA)
+library(cluster)
+source("WGCNA_functions.R")
+library(reshape2)
+library(ggplot2)
+```
+
+
+```{r}
+# run this for all pairwise to normal and output for user
+datExpr=t(read_feather("z.fth")) # gbm.contr can grab entire z and go pairwise to normal # can do Louvain+core
+colnames(datExpr)=datExpr[1,]
+datExpr=datExpr[-1,]
+datExpr=as.data.frame(datExpr)
+datExpr[,] <- lapply(datExpr, function(x) {as.numeric(as.character(x))})
+
+# zscored
+datExpr[,] <- t(scale(t(datExpr)))
+datExpr[is.na(datExpr)]<-0
+
+#datExpr<-t(datExpr)
+y.orig<-as.data.frame(read_feather("y.fth"))#gbm.contr.
+rownames(y.orig)<-y.orig[,"index"]
+y<-y.orig[,-1]
+subtypes<-unique(y)[-8]
+#datExpr[,]<-t(scale(t(datExpr)))
+
+```
+
+```{r}
+sfts<-list()
+for (subtype in subtypes[1:5]){
+  sfts[[subtype]]<-determineSoftPowerWGCNA(data1=datExpr[,y%in%c("CONTR",subtype)], outFile="powerPlots.png", propGenes=1.,title=subtype)
+}
+```
+```{r}
+soft.powers<-list(AIDH=5,
+                  ANAPA=7,
+                  ATRT=5,
+                  CHGL=6,
+                  CHORDM=7,
+                  CN=6,
+                  CNSNB=6,
+                  CPH=9,
+                  DLGNT=6,
+                  DMG=8,
+                  EFT=7,
+                  ENB=7,
+                  EPN=6,
+                  ETMR=5,
+                  EWS=7,
+                  GBM=7,
+                  HGNET=7,
+                  HMB=8,
+                  IHG=6,
+                  LGG=5,
+                  LIPN=8,
+                  LYMPHO=7,
+                  MB=7,
+                  MELAN=8,
+                  MELCYT=8,
+                  MNG=6,
+                  OIDH=4,
+                  PGG=7,
+                  PINT=6,
+                  PITAD=7,
+                  PITUI=6,
+                  PLEX=6,
+                  PTPR=6,
+                  PXA=6,
+                  RETB=9,
+                  SCHW=6,
+                  SFTMPC=8,
+                  SUBEPN=6
+                  )
+```
+
+```{r}
+nets<-list()
+for (subtype in subtypes){
+  try(nets[[subtype]] <- runWGCNA(data1=datExpr[,y%in%c("CONTR",subtype)], propGenes=1., softPower=soft.powers[[subtype]], signedNetwork=TRUE))
+}
+save(nets,file="wcgna.analysis.nets.zscore.Rdata")#save(nets,file="wcgna.analysis.nets.Rdata")
+
+```
+```{r}
+plotModulesCut(referenceDataset=nets$GBM, outFile="plots/modClusterPlot.pdf")
+```
+
+```{r}
+library(limma)
+return.results<-function(net,datExpr,y,split=2){
+  results.final<-list()
+  e1 <- calculateModuleEigengenes(referenceDataset=net, split=split)
+  rownames(e1) <- colnames(datExpr)
+  colnames(e1) <- gsub(pattern="ME", replacement="", x=colnames(e1))
+  mm <- moduleMembership(referenceDataset=net, MEs=e1, split=split, kME_threshold=0.7)
+  n <- max(sapply(mm, length))
+  ll <- lapply(mm, function(X) {
+          c(as.character(X), rep("", times = n - length(X)))
+  })
+  out <- do.call(cbind, ll) 
+  e1$group <- factor(y)#rownames(e1)#substring(y, first=1, last=1)
+  melted <- melt(data=e1, varnames="group")
+  p<-qplot(data=melted, y=value, x=group, facets=.~variable, geom=c("boxplot", "point"),
+        ylab="Eignegene expression", colour=group)
+  x <- e1$group
+  e1$group <- NULL
+  
+  pValues <- c(rep(x="NA", times=ncol(e1)))
+  
+  for(i in 1:ncol(e1)){
+          y2 <- e1[ ,i]
+          fit <- lm(formula=y2 ~ x)
+          a <- anova(fit)
+          pValues[i] <- a[1, 5]
+  }
+  
+  names(pValues)<-colnames(e1)
+  
+  
+  f <- factor(x)
+  design <- model.matrix(~0+f)
+  ncol(design)
+  colnames(design) <- c("Control","Cancer")#"C","M","P"
+  fit <- lmFit(datExpr, design)
+  contrast.matrix <- makeContrasts(Control-Cancer, levels=design)#M-C, P-M, P-C
+  fit2 <- contrasts.fit(fit, contrast.matrix)
+  fit2 <- eBayes(fit2)
+  results <- decideTests(fit2)
+  # vennDiagram(results)
+  res.pos<-results[results>0,]
+  res.neg<-results[results<0,]
+  res.overall<-results[results!=0,]
+  top.genes<-rownames(results)[order(fit2$F,decreasing = T)]
+  
+  
+  hubs <- moduleHubGenes(referenceDataset=net, MEs=calculateModuleEigengenes(referenceDataset=net, split=split), nGenes=20, split=split)
+
+  results.final$e1<-e1
+  results.final$mm<-out
+  results.final$results<-results
+  results.final$top.genes<-list(pos=top.genes[top.genes%in%names(res.pos)][1:30],neg=top.genes[top.genes%in%names(res.neg)][1:30],overall=top.genes[top.genes%in%names(res.overall)][1:30])
+  results.final$hubs<-hubs
+  results.final$plot<-p
+  results.final$fit<-fit2
+  results.final$p.value<-pValues
+  results.final$corr.cancer<-signif(cor(y!="CONTR",e1, use="p"),2)
+  results.final$cancer<-results.final$corr.cancer>0
+  #results.final$cancer.p.vals = corPvalueStudent(cor(y,e1, use="p"), nSamples = length(y))
+  return(results.final)
+}
+
+results.final<-list()
+for (subtype in names(nets)){#names(nets)#c("MELAN")
+  if(!is.null(nets[[subtype]])){
+    try(results.final[[subtype]]<-return.results(nets[[subtype]],nets[[subtype]]$data1,y[y%in%c("CONTR",subtype)]))
+  }
+}
+
+
+```
+
+
+```{r}
+k<-"GBM"
+results.final[[k]]$p.value
+results.final[[k]]$top.genes$pos
+results.final[[k]]$corr.cancer
+results.final[[k]]$cancer
+results.final[[k]]$plot
+for (k in names(results.final)){
+  mod.names<-names(results.final[[k]]$p.value[(as.numeric(results.final[[k]]$p.value)*length(results.final))<0.05])
+  mod.names<-mod.names[order(results.final[[k]]$corr.cancer[1,][names(results.final[[k]]$corr.cancer[1,])%in%mod.names],decreasing=T)]
+  results.final[[k]]$cancer.related.module.hub.genes<-data.frame(results.final[[k]]$hubs)[,mod.names]
+}
+save(results.final,file="wcgna.analysis.results.zscore.Rdata")#save(results.final,file="wcgna.analysis.results.Rdata")
+
+```
+
+
+```{r}
+for (nm in names(results.final)){
+  saveRDS(results.final[[nm]],paste("wgcna_results/",nm,".wgcna.zscore.rds",sep=""))
+}
+```
+
+# GENERATE REPORTS FOR READERS
+
+```{r}
+load("wcgna.analysis.results.zscore.Rdata")#load("wcgna.analysis.results.Rdata")
+```
+
+```{r}
+library(writexl)
+library(readxl)
+hubs<-list()
+
+
+get.hub.df<-function(hubs,p.val,corr.cancer){
+  df<-as.data.frame(hubs)
+  N<-nrow(df)
+  rownames(df)<-1:N
+  df["p.value",]<-p.val
+  df["corr.cancer",]<-corr.cancer
+  df<-rbind(df[c(N+1,N+2),],df[1:N,])
+  return(df)
+}
+
+for (nm in names(results.final)){
+  hubs[[nm]]<-get.hub.df(results.final[[nm]]$hubs,results.final[[nm]]$p.value,results.final[[nm]]$corr.cancer)
+}
+
+write_xlsx(hubs, "wgcna.hub.genes.zscore.xlsx")
+#write_xlsx(hubs, "wgcna.hub.genes.xlsx")
+
+```
+```{r}
+top.genes<-list()
+for (nm in names(results.final)){
+  top.genes[[nm]]<-data.frame(results.final[[nm]]$top.genes)
+}
+write_xlsx(top.genes, "wgcna.top.genes.zscore.xlsx")
+#write_xlsx(top.genes, "wgcna.top.genes.xlsx")
+
+```
+
+```{r}
+ebayes.fits<-list()
+for (nm in names(results.final)){
+  tbl<-topTable(results.final[[nm]]$fit,number=length(results.final[[nm]]$fit$coefficients))
+  tbl.names<-colnames(tbl)
+  tbl$gene<-rownames(tbl)
+  tbl<-tbl[,c("gene",tbl.names)]
+  ebayes.fits[[nm]]<-tbl
+}
+write_xlsx(ebayes.fits, "wgcna.ebayes.zscore.xlsx")
+```
+
+```{r}
+mm<-list()
+for (nm in names(results.final)){
+  mm[[nm]]<-data.frame(results.final[[nm]]$mm)
+}
+write_xlsx(mm, "wgcna.module.membership.zscore.xlsx")
+#write_xlsx(mm, "wgcna.module.membership.xlsx")
+
+e1<-list()
+for (nm in names(results.final)){
+  e1[[nm]]<-results.final[[nm]]$e1
+  e1[[nm]]$y<-y[y%in%c("CONTR",nm)]
+}
+write_xlsx(e1, "wgcna.module.e.genes.zscore.xlsx")
+
+#write_xlsx(e1, "wgcna.module.e.genes.xlsx")
+
+
+```
+
+# deprecated
+
+```{r}
+library(igraph)
+library(RCy3)
+plot(density(nets$GBM$dissTOMA1))
+ncol(nets$GBM$dissTOMA1)
+graph.adjacency(nets$GBM$dissTOMA1)
+
+adj <- 1.-nets$GBM$dissTOMA1
+adj[adj > 0.2] = 1
+adj[adj != 1] = 0
+network <- graph.adjacency(adj)
+network <- simplify(network)
+V(network)$color <- geneModuleColors(nets$GBM,2)
+V(network)$size <- 1
+length(E(network))
+par(mar=c(0,0,0,0))
+network <- delete.vertices(network, degree(network)==0)
+network <- delete.vertices(network, V(network)$color=="grey")
+length(E(network))
+plot(network, layout=layout.fruchterman.reingold(network), edge.arrow.size = 0.2)
+saveRDS(network,"gbm.test.net.rds")
+system("realpath gbm.test.net.rds")
+colnames(nets$GBM$dissTOMA1)
+```
+
+```{r}
+load("wcgna.analysis.nets.zscore.Rdata")
+
+color1=geneModuleColors(nets$GBM,2)
+restGenes= (color1 != "grey")
+diss1=nets$GBM$dissTOMA1[restGenes,restGenes]
+hier1=hclust(as.dist(diss1), method="average" )
+diag(diss1) = NA;
+sizeGrWindow(7,7)
+TOMplot(diss1^8, hier1, as.character(color1[restGenes]),
+main = "TOM heatmap plot, module genes" )
+
+```
+```{r}
+# library(RcppCNPy)
+library(feather)
+for (nm in c("GBM","LGG","MB")){
+  adj <- 1.-nets[[nm]]$dissTOMA1
+  adj.new<-as.data.frame(as.matrix(adj))
+  adj.new$color<-geneModuleColors(nets[[nm]],2)#V(network)$color
+  write_feather(adj.new, paste(nm,".adj.fth",sep=""))
+}
+
+
+```
+
+
+
