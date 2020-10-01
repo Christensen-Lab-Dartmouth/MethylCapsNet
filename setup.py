@@ -32,5 +32,6 @@ setup(name='methylcapsnet',
                         'pathos',
                         'captum',
                         'mlxtend',
-                        'progressbar2'],
+                        'progressbar2',
+                        'submit_hpc'],
       package_data={'methylcapsnet': ['data/*']})

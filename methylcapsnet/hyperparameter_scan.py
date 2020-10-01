@@ -6,7 +6,7 @@ import numpy as np, pandas as pd
 import subprocess
 import sqlite3
 import click
-from methylnet.torque_jobs import assemble_run_torque
+from submit_hpc.job_generator import assemble_run_torque
 #from dask.distributed import Client, as_completed
 RANDOM_SEED=42
 np.random.seed(RANDOM_SEED)
