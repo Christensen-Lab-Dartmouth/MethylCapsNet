@@ -17,7 +17,7 @@ import pickle
 from sklearn.metrics import classification_report
 import click
 import methylcapsnet
-from methylcapsnet.methylcaps_data_models import *
+# from methylcapsnet.methylcaps_data_models import *
 import sqlite3
 import os
 import glob
