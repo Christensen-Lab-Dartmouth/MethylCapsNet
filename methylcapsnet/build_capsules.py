@@ -3,7 +3,6 @@ from pymethylprocess.MethylationDataTypes import MethylationArray
 from sklearn.metrics import mean_absolute_error, r2_score
 import warnings
 warnings.filterwarnings("ignore")
-from pybedtools import BedTool
 import numpy as np
 from functools import reduce
 from torch.utils.data import Dataset, DataLoader
@@ -88,6 +87,7 @@ if 0:
 
 # @pysnooper.snoop('get_mod.log')
 def get_binned_modules(ma=None,a=annotations450,b='lola_vignette_data/activeDHS_universe.bed', include_last=False, min_capsule_len=2000):
+	from pybedtools import BedTool
 	allcpgs=ma.beta.columns.values
 	a=BedTool(a)
 	b=BedTool(b)
