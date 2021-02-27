@@ -21,7 +21,7 @@ from torch.nn import BatchNorm1d
 import xarray as xr
 #from sksurv.linear_model.coxph import BreslowEstimator
 from sklearn.utils.class_weight import compute_class_weight
-from apex import amp
+# from apex import amp
 import torch_scatter
 RANDOM_SEED=42
 np.random.seed(RANDOM_SEED)
@@ -392,7 +392,7 @@ class Trainer:
 		self.validation_dataloader = validation_dataloader
 		self.lr = lr
 		self.optimizer = Adam(self.model.parameters(),self.lr)
-		self.model, self.optimizer = amp.initialize(self.model, self.optimizer, opt_level='O0', loss_scale=1.0)#'dynamic'
+		# self.model, self.optimizer = amp.initialize(self.model, self.optimizer, opt_level='O0', loss_scale=1.0)#'dynamic'
 		self.scheduler=CosineAnnealingLR(self.optimizer, T_max=10, eta_min=0, last_epoch=-1)
 		self.n_epochs = n_epochs
 		self.module_names = self.validation_dataloader.dataset.module_names
@@ -477,8 +477,9 @@ class Trainer:
 				loss=loss+self.model.calc_elastic_norm_loss(self.l1,self.l2, module_x)
 			#loss=loss+self.gamma2*self.compute_custom_loss(y_pred, y_true, y_true_orig)
 			self.optimizer.zero_grad()
-			with amp.scale_loss(loss,self.optimizer) as scaled_loss, detect_anomaly():
-				scaled_loss.backward()
+			loss.backward()
+			# with amp.scale_loss(loss,self.optimizer) as scaled_loss, detect_anomaly():
+			# 	scaled_loss.backward()
 			#loss.backward()
 			self.optimizer.step()
 			if not self.SPWMode:
