@@ -324,7 +324,7 @@ class SPWModulesLayer(nn.Module):
 		self.no_bias=no_bias
 		self.cancel_out=CancelOut(n_output)
 		self.use_cancel_out=use_cancel_out
-		self.scatter_idx=torch.tensor(np.array(list(reduce(lambda x,y: x+y, [[i]*capsule_size for capsule_size in capsule_sizes])))).long()
+		self.scatter_idx=torch.tensor(np.array(list(reduce(lambda x,y: x+y, [[i]*capsule_size for capsule_size in enumerate(capsule_sizes)])))).long()
 		self.capsule_sizes=torch.sqrt(torch.FloatTensor(capsule_sizes))
 		if torch.cuda.is_available:
 			self.capsule_sizes=self.capsule_sizes.cuda()
