@@ -324,15 +324,17 @@ class SPWModulesLayer(nn.Module):
 		self.no_bias=no_bias
 		self.cancel_out=CancelOut(n_output)
 		self.use_cancel_out=use_cancel_out
+		self.scatter_idx=torch.tensor(np.array(list(reduce(lambda x,y: x+y, [[i]*capsule_size for capsule_size in capsule_sizes])))).long()
 		self.capsule_sizes=torch.sqrt(torch.FloatTensor(capsule_sizes))
 		if torch.cuda.is_available:
 			self.capsule_sizes=self.capsule_sizes.cuda()
+			self.scatter_idx=self.scatter_idx.cuda()
 		# self.n_groups=torch.sqrt(n_groups) # FIX
 
 	def calc_elastic_norm_loss(self, l1, l2, idx): # FIX, add proper sqrt for L2 norm
 		#weights=F.sigmoid(self.get_pathway_weights())
-		print(self.weight.shape,idx.shape,self.n_output)
-		return l1*torch.sum(self.capsule_sizes*torch.sqrt(torch_scatter.scatter_add(self.weight**2,idx,dim_size=self.n_output)))#l1*torch.sum(self.weight.flatten())+l2*torch.sum((self.weight**2).flatten())#l1*torch.norm(weights, 1)+l2*torch.norm(weights, 2)#l1*torch.norm(weights, p=1)+l2*torch.norm(weights, p=2)
+		# print(self.weight.shape,idx.shape,self.n_output)
+		return l1*torch.sum(self.capsule_sizes*torch.sqrt(torch_scatter.scatter_add((self.weight.flatten())**2,self.scatter_idx)))#,dim_size=self.n_output#l1*torch.sum(self.weight.flatten())+l2*torch.sum((self.weight**2).flatten())#l1*torch.norm(weights, 1)+l2*torch.norm(weights, 2)#l1*torch.norm(weights, p=1)+l2*torch.norm(weights, p=2)
 
 	def forward(self, x, idx):
 		batch_size=x.size(0)
