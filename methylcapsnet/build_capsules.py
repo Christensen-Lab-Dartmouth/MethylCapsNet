@@ -27,6 +27,7 @@ from dask.diagnostics import ProgressBar
 from pathos.multiprocessing import Pool
 import multiprocessing
 import dask.bag as db
+from pybedtools import BedTool
 from distributed import Client, LocalCluster, get_task_stream
 RANDOM_SEED=42
 np.random.seed(RANDOM_SEED)
@@ -87,7 +88,6 @@ if 0:
 
 # @pysnooper.snoop('get_mod.log')
 def get_binned_modules(ma=None,a=annotations450,b='lola_vignette_data/activeDHS_universe.bed', include_last=False, min_capsule_len=2000):
-	from pybedtools import BedTool
 	allcpgs=ma.beta.columns.values
 	a=BedTool(a)
 	b=BedTool(b)

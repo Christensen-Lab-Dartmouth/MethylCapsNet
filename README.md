@@ -7,6 +7,7 @@ Note: Our repository is currently undergoing a refactor. See https://github.com/
 Quick installation instructions:  
 ```
 conda install -c bioconda bedtools
+# alternatively, wget https://github.com/arq5x/bedtools2/releases/download/v2.30.0/bedtools.static.binary && mv bedtools.static.binary [PATH TO BIN HERE]/bedtools
 pip install methylnet
 git clone https://github.com/Christensen-Lab-Dartmouth/MethylCapsNet
 cd MethylCapsNet
