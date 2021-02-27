@@ -331,7 +331,7 @@ class SPWModulesLayer(nn.Module):
 
 	def calc_elastic_norm_loss(self, l1, l2, idx): # FIX, add proper sqrt for L2 norm
 		#weights=F.sigmoid(self.get_pathway_weights())
-		print(self.weight.shape,idx.shape,self.n_output.shape)
+		print(self.weight.shape,idx.shape,self.n_output)
 		return l1*torch.sum(self.capsule_sizes*torch.sqrt(torch_scatter.scatter_add(self.weight**2,idx,dim_size=self.n_output)))#l1*torch.sum(self.weight.flatten())+l2*torch.sum((self.weight**2).flatten())#l1*torch.norm(weights, 1)+l2*torch.norm(weights, 2)#l1*torch.norm(weights, p=1)+l2*torch.norm(weights, p=2)
 
 	def forward(self, x, idx):
