@@ -69,6 +69,7 @@ def methylcaps():
 @click.option('-l1l2', '--l1_l2', default='', help='L1, L2 penalization, comma delimited.', type=click.Path(exists=False), show_default=True)
 @click.option('-cf2', '--custom_capsule_file2', default='', help='If specified as pkl, saves and loads current capsule configuration for quick use.', show_default=True, type=click.Path(exists=False))
 @click.option('-mc', '--min_capsules', default=5, help='Minimum number of capsules in analysis.', show_default=True)
+@click.option('-cb', '--class_balance', is_flag=True, help='Upweight minority classes?', show_default=True)
 def model_capsnet(train_methyl_array,
 					val_methyl_array,
 					interest_col,
@@ -102,7 +103,8 @@ def model_capsnet(train_methyl_array,
 					fit_spw,
 					l1_l2,
 					custom_capsule_file2,
-					min_capsules):
+					min_capsules,
+					class_balance):
 
 	model_capsnet_(train_methyl_array,
 						val_methyl_array,
@@ -137,7 +139,8 @@ def model_capsnet(train_methyl_array,
 						fit_spw,
 						l1_l2,
 						custom_capsule_file2,
-						min_capsules)
+						min_capsules,
+						class_balance)
 
 @methylcaps.command()
 @click.option('-pm', '--spwnet_model', default='spwnet_model.pkl', help='Path to SPWNet model to extract pathway importances.', type=click.Path(exists=False), show_default=True)
@@ -201,18 +204,18 @@ def return_spw_importances(train_methyl_array,
 	importances.to_csv(feature_csv)
 	with open(capsule_txt,'w') as f:
 		f.write('\n'.join((importances.iloc[:n_capsules] if n_capsules else importances).index.values.tolist()))
-        
+
 @methylcaps.command()
 def execute_top_job(): subprocess.call("sh top_command.sh",shell=True)
-    
+
 @methylcaps.command()
 @click.option('-td', '--test_data_dir', default='./test_data/train_val_test_sets', help='Where to find training and validation sets.', type=click.Path(exists=False), show_default=True)
 def test_pipeline(test_data_dir):
 	command=f"methylcaps-model model_capsnet --bin_len 900000 --caps_out_len 15 --gamma 0.0001 --learning_rate 0.001 --min_capsule_len 300 --primary_caps_out_len 35 --routing_iterations 2 --hidden_topology 160,40 --decoder_topology 220,270 --train_methyl_array {test_data_dir}/train_methyl_array.pkl --val_methyl_array {test_data_dir}/val_methyl_array.pkl --interest_col disease_only --custom_loss none --job 6423388 --batch_size 16 --n_epochs 50 --capsule_choice genomic_binned --gamma2 0.01"
 	subprocess.call(command,shell=True)
 	subprocess.call(f"{command} --predict",shell=True)
-	print("Input predictions.pkl into web_app/WebApp.ipynb") 
-        
+	print("Input predictions.pkl into web_app/WebApp.ipynb")
+
 @methylcaps.command()
 @click.option('-j', '--job', default=0, help='Job number.', show_default=True)
 @click.option('-l', '--loss', default=-1., help='Job number.', show_default=True)

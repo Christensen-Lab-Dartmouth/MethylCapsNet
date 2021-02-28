@@ -42,7 +42,6 @@ class BCEWithNan(object):
 		d = torch.sum(~(torch.isnan(loss)), dim=1, keepdim=True).float()
 		loss = torch.where(torch.isnan(loss), self.replace_val, loss)
 		loss = torch.sum(loss, dim=1, keepdim=True) / d
-
 		if reduce:
 			return torch.mean(loss)
 		else:
@@ -268,6 +267,8 @@ class CapsNet(nn.Module):
 
 	def margin_loss(self,x, labels, weights=1., epsilon=1e-8):
 		batch_size = x.size(0)
+		if torch.is_tensor(weights):
+			weights=weights[:batch_size][labels.bool()]
 
 		v_c = torch.sqrt((x**2+epsilon).sum(dim=2, keepdim=True))
 
@@ -279,9 +280,9 @@ class CapsNet(nn.Module):
 		#print(right)
 		#print(labels)
 
-		loss = labels * left + self.lr_balance * (1.0 - labels) * right#weights*(labels * left + self.lr_balance * (1.0 - labels) * right)
+		loss = (labels * left + self.lr_balance * (1.0 - labels) * right)#weights*(labels * left + self.lr_balance * (1.0 - labels) * right)
 		#print(loss.shape)
-		loss = loss.sum(dim=1).mean()
+		loss = (loss.sum(dim=1)*weights).mean()
 		return loss
 
 	#@pysnooper.snoop('loss.log')
@@ -427,6 +428,7 @@ class Trainer:
 			self.initialize_dirs()
 		if self.class_balance:
 			self.weights=torch.tensor(compute_class_weight('balanced',np.arange(len(dataloader.dataset.binarizer.classes_)),np.argmax(dataloader.dataset.y,axis=1)),dtype=torch.float)
+			if not self.SPWMode: self.weights=torch.vstack([self.weights]*dataloader.batch_size)
 			if torch.cuda.is_available():
 				self.weights = self.weights.cuda()
 		else:

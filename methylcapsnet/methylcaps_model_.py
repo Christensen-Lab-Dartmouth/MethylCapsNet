@@ -69,7 +69,8 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 					fit_spw=False,
 					l1_l2='',
 					custom_capsule_file2='',
-					min_capsules=5):
+					min_capsules=5,
+					class_balance=False):
 
 	capsule_choice=list(capsule_choice)
 	#custom_capsule_file=list(custom_capsule_file)
@@ -217,7 +218,8 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 					gamma2=gamma2,
 					spw_mode=fit_spw,
 					l1=l1 if fit_spw else 0.,
-					l2=l2 if fit_spw else 0.)
+					l2=l2 if fit_spw else 0.,
+					class_balance=class_balance)
 
 	if not predict:
 		try:
