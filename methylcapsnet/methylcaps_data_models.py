@@ -511,7 +511,7 @@ class Trainer:
 		self.scheduler.step()
 		return running_loss
 
-	@pysnooper.snoop('val_loop.log')
+	# @pysnooper.snoop('val_loop.log')
 	def val_test_loop(self, dataloader):
 		self.model.train(False)
 		running_loss=np.zeros((3,)).astype(float)
@@ -541,7 +541,7 @@ class Trainer:
 				#loss=loss+self.gamma2*self.compute_custom_loss(y_pred, y_true, y_true_orig)
 				val_loss=margin_loss.item()#print(loss)
 				print('Epoch {} [{}/{}]: Val Loss {}, Recon/Elastic Loss {}'.format(self.epoch,i,n_batch,val_loss,recon_loss))
-				running_loss=running_loss+np.array([loss.item(),margin_loss,recon_loss.item()] if not self.SPWMode else [val_loss,margin_loss.item(),recon_loss.item()])
+				running_loss=running_loss+np.array([loss.item(),margin_loss.item(),recon_loss.item()] if not self.SPWMode else [val_loss,margin_loss.item(),recon_loss.item()])
 				if not self.SPWMode:
 					routing_coefs=self.model.caps_output_layer.return_routing_coef().detach().cpu().numpy()
 					#print(routing_coefs.shape)
