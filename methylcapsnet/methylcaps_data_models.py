@@ -511,7 +511,7 @@ class Trainer:
 		self.scheduler.step()
 		return running_loss
 
-	#@pysnooper.snoop('val_loop.log')
+	@pysnooper.snoop('val_loop.log')
 	def val_test_loop(self, dataloader):
 		self.model.train(False)
 		running_loss=np.zeros((3,)).astype(float)
