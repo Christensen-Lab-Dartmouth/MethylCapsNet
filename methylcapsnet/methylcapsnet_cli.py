@@ -70,6 +70,7 @@ def methylcaps():
 @click.option('-cf2', '--custom_capsule_file2', default='', help='If specified as pkl, saves and loads current capsule configuration for quick use.', show_default=True, type=click.Path(exists=False))
 @click.option('-mc', '--min_capsules', default=5, help='Minimum number of capsules in analysis.', show_default=True)
 @click.option('-cb', '--class_balance', is_flag=True, help='Upweight minority classes?', show_default=True)
+@click.option('-br', '--batch_routing', is_flag=True, help='Dynamic routing based on batch rather than sample?', show_default=True)
 def model_capsnet(train_methyl_array,
 					val_methyl_array,
 					interest_col,
@@ -104,7 +105,8 @@ def model_capsnet(train_methyl_array,
 					l1_l2,
 					custom_capsule_file2,
 					min_capsules,
-					class_balance):
+					class_balance,
+					batch_routing):
 
 	model_capsnet_(train_methyl_array,
 						val_methyl_array,
@@ -140,7 +142,8 @@ def model_capsnet(train_methyl_array,
 						l1_l2,
 						custom_capsule_file2,
 						min_capsules,
-						class_balance)
+						class_balance,
+						batch_routing)
 
 @methylcaps.command()
 @click.option('-pm', '--spwnet_model', default='spwnet_model.pkl', help='Path to SPWNet model to extract pathway importances.', type=click.Path(exists=False), show_default=True)

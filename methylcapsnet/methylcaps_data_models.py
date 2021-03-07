@@ -160,13 +160,14 @@ class PrimaryCaps(nn.Module):
 		return list(self.capsules[0].parameters())[0].data#self.state_dict()#[self.capsules[i].state_dict() for i in range(len(self.capsules))]
 
 class CapsLayer(nn.Module):
-	def __init__(self, n_capsules, n_routes, n_input, n_output, routing_iterations=3):
+	def __init__(self, n_capsules, n_routes, n_input, n_output, routing_iterations=3, batch_routing=False):
 		super(CapsLayer, self).__init__()
 		self.n_capsules=n_capsules
 		self.num_routes = n_routes
 		self.W=nn.Parameter(torch.randn(1, n_routes, n_capsules, n_output, n_input))
 		self.routing_iterations=routing_iterations
 		self.c_ij=None
+		self.batch_routing=batch_routing
 
 	def forward(self,x):
 		batch_size = x.size(0)
@@ -178,26 +179,32 @@ class CapsLayer(nn.Module):
 		self.u_hat=u_hat.squeeze(4)
 		#print('affine_trans',self.u_hat.size())
 
-		b_ij = Variable(torch.zeros(batch_size, self.num_routes, self.n_capsules, 1))
+		b_ij = Variable(torch.zeros((batch_size if not self.batch_routing else 1), self.num_routes, self.n_capsules, 1))
 
 		if torch.cuda.is_available():
 			b_ij=b_ij.cuda()
 
 		for iteration in range(self.routing_iterations):
-			self.c_ij = F.softmax(b_ij,dim=2).unsqueeze(4)
+			if not self.batch_routing:
+				self.c_ij = F.softmax(b_ij,dim=2).unsqueeze(4)
+				s_j = (self.c_ij * u_hat).sum(dim=1, keepdim=True)
+			else:
+				self.c_ij = softmax(b_ij)
+				c_ij = torch.cat([self.c_ij] * batch_size, dim=0).unsqueeze(4)
+				s_j = (c_ij * u_hat).sum(dim=1, keepdim=True)
 			#print(c_ij)
 			#c_ij = torch.cat([self.c_ij] * batch_size, dim=0).unsqueeze(4)
 			# print('coeff',self.c_ij.size())#[0,:,0,:])#.size())
 			# print(u_hat.size())
 
-			s_j = (self.c_ij * u_hat).sum(dim=1, keepdim=True)
+
 			v_j = self.squash(s_j)
 			#print('z',v_j.size())
 
 			if iteration < self.routing_iterations - 1:
 				a_ij = torch.matmul(u_hat.transpose(3, 4), torch.cat([v_j] * self.num_routes, dim=1))
-				b_ij = b_ij + a_ij.squeeze(4)#.mean(dim=0, keepdim=True)
-
+				b_ij = (b_ij + a_ij.squeeze(4)) if not self.batch_routing else (b_ij + a_ij.squeeze(4).mean(0))#.mean(dim=0, keepdim=True)
+		if self.batch_routing: self.c_ij = c_ij
 		return v_j.squeeze(1)
 
 	def return_routing_coef(self):

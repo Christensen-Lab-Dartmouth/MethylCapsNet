@@ -70,7 +70,8 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 					l1_l2='',
 					custom_capsule_file2='',
 					min_capsules=5,
-					class_balance=False):
+					class_balance=False,
+					batch_routing=False):
 
 	capsule_choice=list(capsule_choice)
 	#custom_capsule_file=list(custom_capsule_file)
@@ -183,7 +184,7 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 		print("Not fitting MethylSPWNet")
 		primary_caps = PrimaryCaps(modules=final_modules,hidden_topology=hidden_topology,n_output=primary_caps_out_len)
 		hidden_caps = []
-		output_caps = CapsLayer(n_out_caps,n_primary,primary_caps_out_len,caps_out_len,routing_iterations=routing_iterations)
+		output_caps = CapsLayer(n_out_caps,n_primary,primary_caps_out_len,caps_out_len,routing_iterations=routing_iterations,batch_routing=batch_routing)
 		decoder = Decoder(n_out_caps*caps_out_len,len(list(ma.beta)),decoder_topology)
 		model = CapsNet(primary_caps, hidden_caps, output_caps, decoder, gamma=gamma)
 
