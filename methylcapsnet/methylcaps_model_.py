@@ -115,7 +115,7 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 			ma_t.pheno=ma_t.pheno.loc[ma_t.pheno[interest_col].isin(select_subtypes)]
 			ma_t.beta=ma_t.beta.loc[ma_t.pheno.index]
 
-	if custom_capsule_file2 and os.path.exists(custom_capsule_file2) and not is_pandas:
+	if custom_capsule_file2 and os.path.exists(custom_capsule_file2):
 		capsules_dict=torch.load(custom_capsule_file2)
 		final_modules, modulecpgs, module_names=capsules_dict['final_modules'], capsules_dict['modulecpgs'], capsules_dict['module_names']
 		if min_capsule_len>1:
