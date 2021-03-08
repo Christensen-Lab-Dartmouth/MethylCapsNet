@@ -322,7 +322,7 @@ def get_gene_sets(cpgs,final_capsules,collection,tissue,n_top_sets):
 	return final_capsules[final_capsules['feature'].isin(gene_sets)]['cpg'].values
 
 #@pysnooper.snoop('final_caps.log')
-def return_final_capsules(methyl_array, capsule_choice, min_capsule_len, collection,tissue, n_top_sets, limited_capsule_names_file, gsea_superset, return_original_capsule_assignments=False):
+def return_final_capsules(methyl_array, capsule_choice, min_capsule_len, collection,tissue, n_top_sets, limited_capsule_names_file, gsea_superset, return_original_capsule_assignments=False, sort_caps=True):
 	from sklearn.preprocessing import LabelEncoder
 	global final_caps_files
 	if limited_capsule_names_file:
@@ -335,6 +335,7 @@ def return_final_capsules(methyl_array, capsule_choice, min_capsule_len, collect
 		cpg_arr=pd.concat([pd.read_pickle(final_caps_files[caps_choice]) for caps_choice in capsule_choice])
 	else:
 		cpg_arr=pd.read_pickle(final_caps_files[capsule_choice[0]])
+	if sort_caps: cpg_arr=cpg_arr.sort_values(['feature']).reset_index(drop=True)
 	cpgs=np.intersect1d(methyl_array.beta.columns.values,cpg_arr['cpg'].values)
 	if gsea_superset:
 		cpgs=get_gene_sets(cpgs,cpg_arr,gsea_superset,tissue,n_top_sets)
