@@ -191,7 +191,6 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 		if test_methyl_array and predict:
 			model.load_state_dict(torch.load('capsnet_model.pkl'))
 
-
 	else:
 		print("Fitting MethylSPWNet")
 		module_lens=[len(x) for x in final_modules]
@@ -201,7 +200,6 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 
 	if torch.cuda.is_available():
 		model=model.cuda()
-
 
 	# extract all c_ij for all layers across all batches, or just last batch
 
