@@ -322,19 +322,20 @@ def get_gene_sets(cpgs,final_capsules,collection,tissue,n_top_sets):
 	return final_capsules[final_capsules['feature'].isin(gene_sets)]['cpg'].values
 
 #@pysnooper.snoop('final_caps.log')
-def return_final_capsules(methyl_array, capsule_choice, min_capsule_len, collection,tissue, n_top_sets, limited_capsule_names_file, gsea_superset, return_original_capsule_assignments=False, sort_caps=True):
+def return_final_capsules(methyl_array, capsule_choice, min_capsule_len, collection,tissue, n_top_sets, limited_capsule_names_file, gsea_superset, return_original_capsule_assignments=False, sort_caps=True, cpg_arr=None):
 	from sklearn.preprocessing import LabelEncoder
 	global final_caps_files
-	if limited_capsule_names_file:
-		with open(limited_capsule_names_file) as f:
-			limited_capsule_names=f.read().replace('\n',' ').split()
-	else:
-		limited_capsule_names=[]
-	#final_capsules=pickle.load(open(final_caps_files[capsule_choice],'rb'))
-	if len(capsule_choice)>1:
-		cpg_arr=pd.concat([pd.read_pickle(final_caps_files[caps_choice]) for caps_choice in capsule_choice])
-	else:
-		cpg_arr=pd.read_pickle(final_caps_files[capsule_choice[0]])
+	if not isinstance(cpg_arr,pd.DataFrame):
+		if limited_capsule_names_file:
+			with open(limited_capsule_names_file) as f:
+				limited_capsule_names=f.read().replace('\n',' ').split()
+		else:
+			limited_capsule_names=[]
+		#final_capsules=pickle.load(open(final_caps_files[capsule_choice],'rb'))
+		if len(capsule_choice)>1:
+			cpg_arr=pd.concat([pd.read_pickle(final_caps_files[caps_choice]) for caps_choice in capsule_choice])
+		else:
+			cpg_arr=pd.read_pickle(final_caps_files[capsule_choice[0]])
 	if sort_caps: cpg_arr=cpg_arr.sort_values(['feature']).reset_index(drop=True)
 	cpgs=np.intersect1d(methyl_array.beta.columns.values,cpg_arr['cpg'].values)
 	if gsea_superset:
@@ -361,7 +362,7 @@ def return_final_capsules(methyl_array, capsule_choice, min_capsule_len, collect
 	else:
 		return capsules,cpgs,features#cpg_arr['feature'].unique()#cpg_arr['cpg'].values
 
-@pysnooper.snoop('build_caps.log')
+# @pysnooper.snoop('build_caps.log')
 def build_capsules(capsule_choice,
 					overlap,
 					bin_len,
@@ -374,7 +375,8 @@ def build_capsules(capsule_choice,
 					gene_context,
 					use_set,
 					number_sets,
-					limited_capsule_names_file):
+					limited_capsule_names_file,
+					cpg_arr=None):
 	capsules,finalcpgs,capsule_names=[],[],[]
 	annotation_file=annotations450
 	if 'genomic_binned' in capsule_choice:
@@ -403,8 +405,8 @@ def build_capsules(capsule_choice,
 		finalcpgs.extend(modulecpgs)
 		capsule_names.extend(module_names)
 
-	if np.intersect1d(CAPSULES,capsule_choice).tolist():
-		final_modules,modulecpgs,module_names=return_final_capsules(methyl_array=ma, capsule_choice=capsule_choice, min_capsule_len=min_capsule_len, collection=gsea_superset,tissue=tissue, n_top_sets=number_sets, limited_capsule_names_file=limited_capsule_names_file, gsea_superset=gsea_superset)
+	if np.intersect1d(CAPSULES,capsule_choice).tolist() or isinstance(cpg_arr,pd.DataFrame):
+		final_modules,modulecpgs,module_names=return_final_capsules(methyl_array=ma, capsule_choice=capsule_choice if not isinstance(cpg_arr,pd.DataFrame) else None, min_capsule_len=min_capsule_len, collection=gsea_superset,tissue=tissue, n_top_sets=number_sets, limited_capsule_names_file=limited_capsule_names_file, gsea_superset=gsea_superset, cpg_arr=cpg_arr)
 		capsules.extend(final_modules)
 		finalcpgs.extend(modulecpgs)
 		capsule_names.extend(module_names)

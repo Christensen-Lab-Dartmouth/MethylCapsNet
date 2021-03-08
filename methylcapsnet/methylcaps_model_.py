@@ -35,7 +35,7 @@ torch.manual_seed(RANDOM_SEED)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
-@pysnooper.snoop('train.log')
+# @pysnooper.snoop('train.log')
 def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pkl',
 					val_methyl_array='train_val_test_sets/val_methyl_array.pkl',
 					interest_col='disease',
@@ -71,7 +71,8 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 					custom_capsule_file2='',
 					min_capsules=5,
 					class_balance=False,
-					batch_routing=False):
+					batch_routing=False,
+					pandas_file=""):
 
 	capsule_choice=list(capsule_choice)
 	#custom_capsule_file=list(custom_capsule_file)
@@ -114,7 +115,7 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 			ma_t.pheno=ma_t.pheno.loc[ma_t.pheno[interest_col].isin(select_subtypes)]
 			ma_t.beta=ma_t.beta.loc[ma_t.pheno.index]
 
-	if custom_capsule_file2 and os.path.exists(custom_capsule_file2):
+	if custom_capsule_file2 and os.path.exists(custom_capsule_file2) and not is_pandas:
 		capsules_dict=torch.load(custom_capsule_file2)
 		final_modules, modulecpgs, module_names=capsules_dict['final_modules'], capsules_dict['modulecpgs'], capsules_dict['module_names']
 		if min_capsule_len>1:
@@ -124,6 +125,8 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 			modulecpgs=(reduce(np.union1d,final_modules)).tolist()
 
 	else:
+		cpg_arr=None
+		if pandas_file and os.path.exists(pandas_file): cpg_arr=pd.read_pickle(pandas_file)
 		final_modules, modulecpgs, module_names=build_capsules(capsule_choice,
 																overlap,
 																bin_len,
@@ -136,7 +139,8 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 																gene_context,
 																use_set,
 																number_sets,
-																limited_capsule_names_file)
+																limited_capsule_names_file,
+																cpg_arr)
 		if custom_capsule_file2:
 			torch.save(dict(final_modules=final_modules, modulecpgs=modulecpgs, module_names=module_names),custom_capsule_file2)
 

@@ -71,6 +71,7 @@ def methylcaps():
 @click.option('-mc', '--min_capsules', default=5, help='Minimum number of capsules in analysis.', show_default=True)
 @click.option('-cb', '--class_balance', is_flag=True, help='Upweight minority classes?', show_default=True)
 @click.option('-br', '--batch_routing', is_flag=True, help='Dynamic routing based on batch rather than sample?', show_default=True)
+@click.option('-pd', '--pandas_file', default='', help='Custom caps filename is pandas dataframe.', type=click.Path(exists=False), show_default=True)
 def model_capsnet(train_methyl_array,
 					val_methyl_array,
 					interest_col,
@@ -106,7 +107,8 @@ def model_capsnet(train_methyl_array,
 					custom_capsule_file2,
 					min_capsules,
 					class_balance,
-					batch_routing):
+					batch_routing,
+					pandas_file):
 
 	model_capsnet_(train_methyl_array,
 						val_methyl_array,
@@ -143,7 +145,8 @@ def model_capsnet(train_methyl_array,
 						custom_capsule_file2,
 						min_capsules,
 						class_balance,
-						batch_routing)
+						batch_routing,
+						pandas_file)
 
 @methylcaps.command()
 @click.option('-pm', '--spwnet_model', default='spwnet_model.pkl', help='Path to SPWNet model to extract pathway importances.', type=click.Path(exists=False), show_default=True)
