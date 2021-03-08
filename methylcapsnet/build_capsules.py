@@ -325,12 +325,12 @@ def get_gene_sets(cpgs,final_capsules,collection,tissue,n_top_sets):
 def return_final_capsules(methyl_array, capsule_choice, min_capsule_len, collection,tissue, n_top_sets, limited_capsule_names_file, gsea_superset, return_original_capsule_assignments=False, sort_caps=True, cpg_arr=None):
 	from sklearn.preprocessing import LabelEncoder
 	global final_caps_files
+	if limited_capsule_names_file:
+		with open(limited_capsule_names_file) as f:
+			limited_capsule_names=f.read().replace('\n',' ').split()
+	else:
+		limited_capsule_names=[]
 	if not isinstance(cpg_arr,pd.DataFrame):
-		if limited_capsule_names_file:
-			with open(limited_capsule_names_file) as f:
-				limited_capsule_names=f.read().replace('\n',' ').split()
-		else:
-			limited_capsule_names=[]
 		#final_capsules=pickle.load(open(final_caps_files[capsule_choice],'rb'))
 		if len(capsule_choice)>1:
 			cpg_arr=pd.concat([pd.read_pickle(final_caps_files[caps_choice]) for caps_choice in capsule_choice])
