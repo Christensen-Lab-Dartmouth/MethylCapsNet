@@ -153,7 +153,7 @@ def reduce_caps(capsules,allcpgs,min_capsule_len):
 	client.close()
 	return capsules
 
-@pysnooper.snoop('get_caps.log')
+# @pysnooper.snoop('get_caps.log')
 def return_custom_capsules(ma=None,capsule_file=selected_caps_file, capsule_sets=['all'], min_capsule_len=2000, include_last=False, limited_capsule_names_file=''):
 	allcpgs=ma.beta.columns.values
 	if limited_capsule_names_file:
@@ -187,7 +187,7 @@ def divide_chunks(l, n):
 	for i in range(0, len(l), len(l)//n):
 		yield l[i:i + n]
 
-@pysnooper.snoop('gsea_build.log')
+# @pysnooper.snoop('gsea_build.log')
 def return_gsea_capsules(ma=None,tissue='',context_on=False,use_set=False,gsea_superset='H',n_top_sets=25,min_capsule_len=2000, all_genes=False, union_cpgs=True, limited_capsule_names_file=''):
 	global gene2cpg, gsea_collections, gene_set_weights
 	if limited_capsule_names_file:
@@ -376,7 +376,8 @@ def build_capsules(capsule_choice,
 					use_set,
 					number_sets,
 					limited_capsule_names_file,
-					cpg_arr=None):
+					cpg_arr=None,
+					sort_caps=True):
 	capsules,finalcpgs,capsule_names=[],[],[]
 	annotation_file=annotations450
 	if 'genomic_binned' in capsule_choice:
@@ -406,7 +407,7 @@ def build_capsules(capsule_choice,
 		capsule_names.extend(module_names)
 
 	if np.intersect1d(CAPSULES,capsule_choice).tolist() or isinstance(cpg_arr,pd.DataFrame):
-		final_modules,modulecpgs,module_names=return_final_capsules(methyl_array=ma, capsule_choice=capsule_choice if not isinstance(cpg_arr,pd.DataFrame) else None, min_capsule_len=min_capsule_len, collection=gsea_superset,tissue=tissue, n_top_sets=number_sets, limited_capsule_names_file=limited_capsule_names_file, gsea_superset=gsea_superset, cpg_arr=cpg_arr)
+		final_modules,modulecpgs,module_names=return_final_capsules(methyl_array=ma, capsule_choice=capsule_choice if not isinstance(cpg_arr,pd.DataFrame) else None, min_capsule_len=min_capsule_len, collection=gsea_superset,tissue=tissue, n_top_sets=number_sets, limited_capsule_names_file=limited_capsule_names_file, gsea_superset=gsea_superset, cpg_arr=cpg_arr, sort_caps=sort_caps)
 		capsules.extend(final_modules)
 		finalcpgs.extend(modulecpgs)
 		capsule_names.extend(module_names)
