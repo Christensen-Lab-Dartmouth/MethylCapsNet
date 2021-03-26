@@ -72,7 +72,8 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 					min_capsules=5,
 					class_balance=False,
 					batch_routing=False,
-					pandas_file=""):
+					pandas_file="",
+					model_state_dict_pkl=""):
 
 	capsule_choice=list(capsule_choice)
 	#custom_capsule_file=list(custom_capsule_file)
@@ -193,14 +194,14 @@ def model_capsnet_(train_methyl_array='train_val_test_sets/train_methyl_array.pk
 		model = CapsNet(primary_caps, hidden_caps, output_caps, decoder, gamma=gamma)
 
 		if test_methyl_array and predict:
-			model.load_state_dict(torch.load('capsnet_model.pkl'))
+			model.load_state_dict(torch.load('capsnet_model.pkl' if not os.path.exists(model_state_dict_pkl) else model_state_dict_pkl))
 
 	else:
 		print("Fitting MethylSPWNet")
 		module_lens=[len(x) for x in final_modules]
 		model=MethylSPWNet(module_lens, hidden_topology, dropout_p=0.2, n_output=n_out_caps)
 		if test_methyl_array and predict:
-			model.load_state_dict(torch.load('spwnet_model.pkl'))
+			model.load_state_dict(torch.load('spwnet_model.pkl' if not os.path.exists(model_state_dict_pkl) else model_state_dict_pkl))
 
 	if torch.cuda.is_available():
 		model=model.cuda()
